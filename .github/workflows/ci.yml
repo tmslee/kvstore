@@ -2,35 +2,101 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
+  build-and-test:
     runs-on: ${{ matrix.os }}
     
     strategy:
       matrix:
-        os: [ubuntu-22.04, macos-latest]
+        os: [ubuntu-latest, macos-latest]
+        build_type: [Debug, Release]
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ clang-format clang-tidy
+      
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install cmake llvm
+          echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
+      
+      - name: Check formatting
+        run: |
+          find include src tests -name '*.cpp' -o -name '*.hpp' | xargs clang-format --dry-run --Werror
+      
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+      
+      - name: Build
+        run: cmake --build build
+      
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  formatting:
+    runs-on: ubuntu-latest
     
-    - name: Install CMake (Ubuntu)
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+      
+      - name: Check formatting
+        run: |
+          find include src tests -name '*.cpp' -o -name '*.hpp' | xargs clang-format --dry-run --Werror
+
+  sanitizers:
+    runs-on: ${{ matrix.os }}
     
-    - name: Install CMake (macOS)
-      if: runner.os == 'macOS'
-      run: brew install cmake
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        sanitizer:
+          - { name: "ASan", flag: "ENABLE_ASAN" }
+          - { name: "TSan", flag: "ENABLE_TSAN" }
+          - { name: "UBSan", flag: "ENABLE_UBSAN" }
     
-    - name: Configure
-      run: cmake -B build
-    
-    - name: Build
-      run: cmake --build build
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake clang
+      
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install cmake
+      
+      - name: Adjust ASLR for TSan (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' && matrix.sanitizer.flag == 'ENABLE_TSAN'
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      
+      - name: Configure with ${{ matrix.sanitizer.name }}
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -D${{ matrix.sanitizer.flag }}=ON
+      
+      - name: Build
+        run: cmake --build build
+      
+      - name: Test with ${{ matrix.sanitizer.name }}
+        run: ctest --test-dir build --output-on-failure
