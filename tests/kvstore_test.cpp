@@ -90,7 +90,7 @@ TEST_F(KVStoreTest, ConcurrentWrites) {
     constexpr int kNumThreads = 10;
     constexpr int kWritesPerThread = 1000;
 
-    std::vector<std::jthread> threads;
+    std::vector<std::thread> threads;
     threads.reserve(kNumThreads);
     for (int t = 0; t < kNumThreads; ++t) {
         threads.emplace_back([this, t] {
@@ -101,7 +101,9 @@ TEST_F(KVStoreTest, ConcurrentWrites) {
             }
         });
     }
-    threads.clear();
+    for (auto& t : threads) {
+        t.join();
+    }
     EXPECT_EQ(store.size(), kNumThreads * kWritesPerThread);
 }
 
@@ -116,7 +118,7 @@ TEST_F(KVStoreTest, ConcurrentReadsAndWrites) {
 
     store.put("shared_key", "initial");
 
-    std::vector<std::jthread> threads;
+    std::vector<std::thread> threads;
     threads.reserve(kNumReaders + kNumWriters);
 
     for (int t = 0; t < kNumWriters; ++t) {
@@ -135,7 +137,9 @@ TEST_F(KVStoreTest, ConcurrentReadsAndWrites) {
         });
     }
 
-    threads.clear();
+    for (auto& t : threads) {
+        t.join();
+    }
     EXPECT_TRUE(store.contains("shared_key"));
 }
 
