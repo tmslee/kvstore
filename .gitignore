@@ -1,0 +1,14 @@
+# Build artifacts
+build/
+*.o
+*.a
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Test data
+kvstore_data/
