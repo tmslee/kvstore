@@ -9,7 +9,7 @@
 namespace kvstore::test {
 
 class KVStoreTest : public ::testing::Test {
-protected:
+   protected:
     KVStore store;
 };
 
@@ -76,7 +76,7 @@ TEST_F(KVStoreTest, Size) {
 TEST_F(KVStoreTest, EmptyKeyAndValue) {
     store.put("", "empty_key_value");
     store.put("empty_value", "");
-    
+
     auto res1 = store.get("");
     ASSERT_TRUE(res1.has_value());
     EXPECT_EQ(*res1, "empty_key_value");
@@ -92,9 +92,9 @@ TEST_F(KVStoreTest, ConcurrentWrites) {
 
     std::vector<std::jthread> threads;
     threads.reserve(kNumThreads);
-    for(int t=0; t<kNumThreads; ++t){
+    for (int t = 0; t < kNumThreads; ++t) {
         threads.emplace_back([this, t] {
-            for(int i=0; i<kWritesPerThread; ++i) {
+            for (int i = 0; i < kWritesPerThread; ++i) {
                 std::string key = "thread" + std::to_string(t) + "_key" + std::to_string(i);
                 std::string val = "value" + std::to_string(i);
                 store.put(key, val);
@@ -102,13 +102,14 @@ TEST_F(KVStoreTest, ConcurrentWrites) {
         });
     }
     threads.clear();
-    EXPECT_EQ(store.size(), kNumThreads*kWritesPerThread);
+    EXPECT_EQ(store.size(), kNumThreads * kWritesPerThread);
 }
 
 TEST_F(KVStoreTest, ConcurrentReadsAndWrites) {
-    // concurrency stress test - verify that store doesnt crash/deadlock/corrupt under concurrent r/w pressure
-    // a broken locking logic would likely trigger UB; crashes, hangs or sanitizer errors
-    
+    // concurrency stress test - verify that store doesnt crash/deadlock/corrupt under concurrent
+    // r/w pressure a broken locking logic would likely trigger UB; crashes, hangs or sanitizer
+    // errors
+
     constexpr int kNumReaders = 5;
     constexpr int kNumWriters = 5;
     constexpr int kOpsPerThread = 1000;
@@ -118,17 +119,17 @@ TEST_F(KVStoreTest, ConcurrentReadsAndWrites) {
     std::vector<std::jthread> threads;
     threads.reserve(kNumReaders + kNumWriters);
 
-    for(int t=0; t<kNumWriters; ++t) {
+    for (int t = 0; t < kNumWriters; ++t) {
         threads.emplace_back([this, t] {
-            for(int i=0; i<kOpsPerThread; ++i) {
+            for (int i = 0; i < kOpsPerThread; ++i) {
                 store.put("shared_key", "writer" + std::to_string(t) + "_" + std::to_string(i));
             }
         });
     }
 
-    for(int t=0; t<kNumReaders; ++t) {
+    for (int t = 0; t < kNumReaders; ++t) {
         threads.emplace_back([this] {
-            for(int i=0; i<kOpsPerThread; ++i) {
+            for (int i = 0; i < kOpsPerThread; ++i) {
                 [[maybe_unused]] auto result = store.get("shared_key");
             }
         });
@@ -138,4 +139,4 @@ TEST_F(KVStoreTest, ConcurrentReadsAndWrites) {
     EXPECT_TRUE(store.contains("shared_key"));
 }
 
-}
+}  // namespace kvstore::test

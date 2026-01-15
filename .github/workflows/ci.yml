@@ -62,15 +62,24 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++
+          sudo apt-get install -y cmake clang
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           brew install cmake
 
+      - name: Adjust ASLR for TSan (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' && matrix.sanitizer.flag == 'ENABLE_TSAN'
+        run: sudo sysctl vm.mmap_rnd_bits=28
+
       - name: Configure with ${{ matrix.sanitizer.name }}
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -D${{ matrix.sanitizer.flag }}=ON
+        run: |
+          cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -D${{ matrix.sanitizer.flag }}=ON
 
       - name: Build
         run: cmake --build build

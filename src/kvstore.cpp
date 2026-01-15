@@ -7,7 +7,7 @@
 namespace kvstore {
 
 class KVStore::Impl {
-public:
+   public:
     void put(std::string_view key, std::string_view value) {
         std::unique_lock lock(mutex_);
         data_.insert_or_assign(std::string(key), std::string(value));
@@ -15,7 +15,7 @@ public:
 
     [[nodiscard]] std::optional<std::string> get(std::string_view key) const {
         std::shared_lock lock(mutex_);
-        if(auto it = data_.find(std::string(key)); it != data_.end()) {
+        if (auto it = data_.find(std::string(key)); it != data_.end()) {
             return it->second;
         }
         return std::nullopt;
@@ -45,12 +45,13 @@ public:
         std::unique_lock lock(mutex_);
         data_.clear();
     }
-private:
+
+   private:
     mutable std::shared_mutex mutex_;
     std::unordered_map<std::string, std::string> data_;
 };
 
-KVStore::KVStore(): impl_(std::make_unique<Impl>()) {}
+KVStore::KVStore() : impl_(std::make_unique<Impl>()) {}
 
 KVStore::~KVStore() = default;
 
@@ -85,4 +86,4 @@ void KVStore::clear() noexcept {
     impl_->clear();
 }
 
-}
+}  // namespace kvstore
