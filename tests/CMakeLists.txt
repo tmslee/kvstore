@@ -5,6 +5,8 @@ add_executable(kvstore_tests
 target_link_libraries(kvstore_tests
     PRIVATE
         kvstore
+        GTest::gtest_main
 )
 
-add_test(NAME kvstore_tests COMMAND kvstore_tests)
+include(GoogleTest)
+gtest_discover_tests(kvstore_tests)

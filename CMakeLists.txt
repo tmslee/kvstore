@@ -30,6 +30,16 @@ target_include_directories(kvstore
         $<INSTALL_INTERFACE:include>
 )
 
+# Fetch GoogleTest
+include(FetchContent)
+FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+)
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+
 # Enable testing
 enable_testing()
 add_subdirectory(tests)
