@@ -7,30 +7,73 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
+  build-and-test:
+    name: Build and test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     
     strategy:
       matrix:
-        os: [ubuntu-22.04, macos-latest]
+        os: [ubuntu-latest, macos-latest]
+        build_type: [Debug, Release]
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Install CMake (Ubuntu)
-      if: runner.os == 'Linux'
+    - name: Install dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake
+        sudo apt-get install -y cmake g++ clang-format clang-tidy
     
-    - name: Install CMake (macOS)
-      if: runner.os == 'macOS'
-      run: brew install cmake
+    - name: Install dependencies (macOS)
+      if: matrix.os == 'macOS'
+      run: |
+        brew install cmake llvm
+        echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
+      
+    - name: Check formatting
+      run: |
+        find include src tests -name '*.cpp' -o -name '*.hpp' | xargs clang-format --dry-run --Werror
     
     - name: Configure
-      run: cmake -B build
+      run: cmake -B build DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
     
     - name: Build
       run: cmake --build build
+
+    - name:  Test
+      run: ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        sanitizer:
+          - { name: "ASan", flag: "ENABLE_ASAN" }
+          - { name: "TSan", flag: "ENABLE_TSAN" }
+          - { name: "UBSan", flag: "ENABLE_UBSAN" }
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install cmake
+
+      - name: Configure with ${{ matrix.sanitizer.name }}
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -D${{ matrix.sanitizer.flag }}=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test with ${{ matrix.sanitizer.name }}
+        run: ctest --test-dir build --output-on-failure
