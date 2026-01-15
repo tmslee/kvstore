@@ -14,47 +14,128 @@ protected:
 };
 
 TEST_F(KVStoreTest, InitiallyEmpty) {
-
+    EXPECT_TRUE(store.empty());
+    EXPECT_EQ(store.size(), 0);
 }
 
 TEST_F(KVStoreTest, PutAndGet) {
-
+    store.put("key1", "value1");
+    auto result = store.get("key1");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, "value1");
 }
 
 TEST_F(KVStoreTest, GetMissingKey) {
-    
+    auto result = store.get("nonexistent");
+    EXPECT_FALSE(result.has_value());
 }
 
 TEST_F(KVStoreTest, PutOverwrites) {
-    
+    store.put("key1", "value1");
+    store.put("key1", "value2");
+    auto result = store.get("key1");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, "value2");
 }
 
 TEST_F(KVStoreTest, Contains) {
-    
+    EXPECT_FALSE(store.contains("key1"));
+    store.put("key1", "value1");
+    EXPECT_TRUE(store.contains("key1"));
 }
 
 TEST_F(KVStoreTest, Remove) {
-    
+    store.put("key1", "value1");
+    EXPECT_TRUE(store.remove("key1"));
+    EXPECT_FALSE(store.contains("key1"));
+    EXPECT_FALSE(store.remove("key1"));
 }
 
 TEST_F(KVStoreTest, Clear) {
-    
+    store.put("key1", "value1");
+    store.put("key2", "value2");
+    store.put("key3", "value3");
+    store.clear();
+    EXPECT_TRUE(store.empty());
+    EXPECT_EQ(store.size(), 0);
+    EXPECT_FALSE(store.contains("key1"));
 }
 
 TEST_F(KVStoreTest, Size) {
-    
+    EXPECT_EQ(store.size(), 0);
+    store.put("key1", "value1");
+    EXPECT_EQ(store.size(), 1);
+    store.put("key2", "value2");
+    EXPECT_EQ(store.size(), 2);
+    store.put("key1", "newvalue");
+    EXPECT_EQ(store.size(), 2);
+    (void)store.remove("key1");
+    EXPECT_EQ(store.size(), 1);
 }
 
 TEST_F(KVStoreTest, EmptyKeyAndValue) {
+    store.put("", "empty_key_value");
+    store.put("empty_value", "");
     
+    auto res1 = store.get("");
+    ASSERT_TRUE(res1.has_value());
+    EXPECT_EQ(*res1, "empty_key_value");
+
+    auto res2 = store.get("empty_value");
+    ASSERT_TRUE(res2.has_value());
+    EXPECT_EQ(*res2, "");
 }
 
 TEST_F(KVStoreTest, ConcurrentWrites) {
-    
+    constexpr int kNumThreads = 10;
+    constexpr int kWritesPerThread = 1000;
+
+    std::vector<std::jthread> threads;
+    threads.reserve(kNumThreads);
+    for(int t=0; t<kNumThreads; ++t){
+        threads.emplace_back([this, t] {
+            for(int i=0; i<kWritesPerThread; ++i) {
+                std::string key = "thread" + std::to_string(t) + "_key" + std::to_string(i);
+                std::string val = "value" + std::to_string(i);
+                store.put(key, val);
+            }
+        });
+    }
+    threads.clear();
+    EXPECT_EQ(store.size(), kNumThreads*kWritesPerThread);
 }
 
 TEST_F(KVStoreTest, ConcurrentReadsAndWrites) {
+    // concurrency stress test - verify that store doesnt crash/deadlock/corrupt under concurrent r/w pressure
+    // a broken locking logic would likely trigger UB; crashes, hangs or sanitizer errors
     
+    constexpr int kNumReaders = 5;
+    constexpr int kNumWriters = 5;
+    constexpr int kOpsPerThread = 1000;
+
+    store.put("shared_key", "initial");
+
+    std::vector<std::jthread> threads;
+    threads.reserve(kNumReaders + kNumWriters);
+
+    for(int t=0; t<kNumWriters; ++t) {
+        threads.emplace_back([this, t] {
+            for(int i=0; i<kOpsPerThread; ++i) {
+                store.put("shared_key", "writer" + std::to_string(t) + "_" + std::to_string(i));
+            }
+        });
+    }
+
+    for(int t=0; t<kNumReaders; ++t) {
+        threads.emplace_back([this] {
+            for(int i=0; i<kOpsPerThread; ++i) {
+                [[maybe_unused]] auto result = store.get("shared_key");
+            }
+        });
+    }
+
+    threads.clear();
+    EXPECT_TRUE(store.contains("shared_key"));
 }
 
 }
