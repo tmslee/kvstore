@@ -9,6 +9,10 @@
 
 namespace kvstore {
 
+struct Options {
+    std::optional<std::filesystem::path> persistence_path = std::nullopt;
+};
+
 class KVStore {
    public:
     KVStore();
