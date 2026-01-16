@@ -17,6 +17,7 @@ uint32_t read_uint32(std::istream& in) {
 
 void write_string(std::ostream&out, std::string_view str) {
     write_uint32(out, static_cast<uint32_t>(str.size()));
+    // need to cast str.size() (std::size_t is signed) to std::streamsize (unsigned)to avoid warnings
     out.write(str.data(), static_cast<std::streamsize>(str.size()));
 }
 
@@ -31,6 +32,9 @@ bool read_string(std::istream& in, std::string& str){
 }
 } // namespace
 
+// note: std::ios::binary | std::ios::app are both binary flags and are being OR'ed
+// binary: dont translate newlines, write raw bytes exactly as given
+// app: append mmode
 WriteAheadLog::WriteAheadLog(const std::filesystem::path& path) 
     : path_(path), out_(path, std::ios::binary | std::ios::app)
 {
@@ -66,6 +70,8 @@ void WriteAheadLog::write_entry(EntryType type, std::string_view key, std::strin
 }
 
 bool WriteAheadLog::read_entry(std::ifstrream& in, EntryType& type, std::string& key, std::string&value) {
+    // we return bool instead of throwing because end of file is expected, not exceptional
+    // not being able to read successfully is an expected pattern eventually
     in.read(reinterpret_cast<char*>(&type), sizeof(type));
     if(!in.good()) {
         return false;
@@ -88,7 +94,7 @@ void WriteAheadLog::replay(std::function<void(EntryType, std::string_view, std::
     EntryType type{};
     std::string key;
     std::string value;
-
+    // try to read entry sequentially until end of file or failure
     while(read_entry(in, type, key, value)) {
         callback(type, key, value);
     }
@@ -97,12 +103,14 @@ void WriteAheadLog::replay(std::function<void(EntryType, std::string_view, std::
 
 void WriteAheadLog::sync() {
     std::lock_guard lock(mutex_);
+    // flush forces buffered data to be written to disk immediately
     out_.flush();
 }
 
 void WriteAheadLog::truncate() {
     std::lock_guard lock(mutex_);
     out_.close();
+    // trunc: truncate, delete all existing content
     out_.open(path_, std::ios::binary | std::ios::trunc);
     if(!out_.is_open()) {
         throw std::runtime_error("failed to truncate WAL file: " + path_.string());
