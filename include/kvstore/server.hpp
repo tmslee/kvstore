@@ -1,0 +1,53 @@
+#ifndef KVSTORE_SERVER_HPP
+#define KVSTORE_SERVER_HPP
+
+#include "kvstore/kvstore.hpp"
+
+#include <atomic>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
+
+namespace kvstore {
+
+struct ServerOptions {
+    std::string host = "127.0.0.1";
+    uint16_t port = 6379;
+};
+
+class Server {
+public:
+    Server(KVSttore& store, const ServerOptions& options = {});
+    ~Server();
+
+    Server(const Server&) = delete;
+    Server& operator=(const Server&) = delete;
+    Server(Server&&) = delete;
+    Server& operator=(Server&&) = delete;
+
+    void start();
+    void stop();
+
+    [[nodiscard]] bool running() const noexcept;
+    [[nodiscard]] uint16_t port() const noexcept;
+
+private:
+    void accept_loop();
+    void handle_client(int client_fd);
+    std::string process_command(const std::string& line);
+
+    KVStore& store_;
+    ServerOptions options_;
+
+    int server_fd = -1;
+    std::atomic<bool> running_ = false;
+    std::thread accept_thread_;
+    std::vector<std::thread> client_threads_;
+    std::mutex clients_mutex_;
+}
+
+} //namespace kvstore
+
+#endif
