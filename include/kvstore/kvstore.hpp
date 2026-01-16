@@ -2,11 +2,11 @@
 #define KVSTORE_KVSTORE_HPP
 
 #include <cstddef>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <filesystem>
 
 namespace kvstore {
 

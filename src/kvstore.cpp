@@ -1,17 +1,18 @@
 #include "kvstore/kvstore.hpp"
-#include "kvstore/wal.hpp"
 
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
 
+#include "kvstore/wal.hpp"
+
 namespace kvstore {
 
 class KVStore::Impl {
-public:
+   public:
     Impl() = default;
     explicit Impl(const Options& options) {
-        if(options.persistence_path.has_value()) {
+        if (options.persistence_path.has_value()) {
             wal_ = std::make_unique<WriteAheadLog>(options.persistence_path.value());
             recover();
         }
@@ -19,7 +20,7 @@ public:
 
     void put(std::string_view key, std::string_view value) {
         std::unique_lock lock(mutex_);
-        if(wal_) {
+        if (wal_) {
             wal_->log_put(key, value);
         }
         data_.insert_or_assign(std::string(key), std::string(value));
@@ -35,7 +36,7 @@ public:
 
     [[nodiscard]] bool remove(std::string_view key) {
         std::unique_lock lock(mutex_);
-        if(wal_) {
+        if (wal_) {
             wal_->log_remove(key);
         }
         return data_.erase(std::string(key)) > 0;
@@ -58,16 +59,16 @@ public:
 
     void clear() noexcept {
         std::unique_lock lock(mutex_);
-        if(wal_) {
+        if (wal_) {
             wal_->log_clear();
         }
         data_.clear();
     }
 
-private:
+   private:
     void recover() {
-        wal_->replay([this](EntryType type, std::string_view key, std::string_view value){
-            switch(type) {
+        wal_->replay([this](EntryType type, std::string_view key, std::string_view value) {
+            switch (type) {
                 case EntryType::Put:
                     data_.insert_or_assign(std::string(key), std::string(value));
                     break;
@@ -88,8 +89,7 @@ private:
 
 KVStore::KVStore() : impl_(std::make_unique<Impl>()) {}
 
-KVStore::KVStore(const Options& options)
-    : impl_(std::make_unique<Impl>(options)) {}
+KVStore::KVStore(const Options& options) : impl_(std::make_unique<Impl>(options)) {}
 
 KVStore::~KVStore() = default;
 

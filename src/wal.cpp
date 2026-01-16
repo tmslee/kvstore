@@ -15,32 +15,32 @@ uint32_t read_uint32(std::istream& in) {
     return value;
 }
 
-void write_string(std::ostream&out, std::string_view str) {
+void write_string(std::ostream& out, std::string_view str) {
     write_uint32(out, static_cast<uint32_t>(str.size()));
-    // need to cast str.size() (std::size_t is signed) to std::streamsize (unsigned)to avoid warnings
+    // need to cast str.size() (std::size_t is signed) to std::streamsize (unsigned)to avoid
+    // warnings
     out.write(str.data(), static_cast<std::streamsize>(str.size()));
 }
 
-bool read_string(std::istream& in, std::string& str){
+bool read_string(std::istream& in, std::string& str) {
     uint32_t len = read_uint32(in);
-    if(!in.good()) {
+    if (!in.good()) {
         return false;
     }
     str.resize(len);
     in.read(str.data(), len);
     return in.good();
 }
-} // namespace
+}  // namespace
 
 // note: std::ios::binary | std::ios::app are both binary flags and are being OR'ed
 // binary: dont translate newlines, write raw bytes exactly as given
 // app: append mmode
-WriteAheadLog::WriteAheadLog(const std::filesystem::path& path) 
-    : path_(path), out_(path, std::ios::binary | std::ios::app)
-{
-    if(!out_.is_open()) {
+WriteAheadLog::WriteAheadLog(const std::filesystem::path& path)
+    : path_(path), out_(path, std::ios::binary | std::ios::app) {
+    if (!out_.is_open()) {
         throw std::runtime_error("failed to open WAL file: " + path.string());
-    }    
+    }
 }
 
 WriteAheadLog::~WriteAheadLog() = default;
@@ -51,10 +51,10 @@ WriteAheadLog::~WriteAheadLog() = default;
     manually implement move ctor and assignment.
     mutex is jsut default constructed fresh in new object
 */
-WriteAheadLog::WriteAheadLog(WriteAheadLog&& other) noexcept 
+WriteAheadLog::WriteAheadLog(WriteAheadLog&& other) noexcept
     : path_(std::move(other.path_)), out_(std::move(other.out_)) {}
 WriteAheadLog& WriteAheadLog::operator=(WriteAheadLog&& other) noexcept {
-    if(this != &other) {
+    if (this != &other) {
         path_ = std::move(other.path_);
         out_ = std::move(other.out_);
     }
@@ -83,36 +83,37 @@ void WriteAheadLog::write_entry(EntryType type, std::string_view key, std::strin
     out_.flush();
 }
 
-bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& key, std::string&value) {
+bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& key,
+                               std::string& value) {
     // we return bool instead of throwing because end of file is expected, not exceptional
     // not being able to read successfully is an expected pattern eventually
     in.read(reinterpret_cast<char*>(&type), sizeof(type));
-    if(!in.good()) {
+    if (!in.good()) {
         return false;
     }
-    if(!read_string(in, key)) {
+    if (!read_string(in, key)) {
         return false;
     }
-    if(!read_string(in, value)) {
+    if (!read_string(in, value)) {
         return false;
     }
     return true;
 }
 
-void WriteAheadLog::replay(std::function<void(EntryType, std::string_view, std::string_view)> callback) {
+void WriteAheadLog::replay(
+    std::function<void(EntryType, std::string_view, std::string_view)> callback) {
     std::lock_guard lock(mutex_);
     std::ifstream in(path_, std::ios::binary);
-    if(!in.is_open()) {
+    if (!in.is_open()) {
         return;
     }
     EntryType type{};
     std::string key;
     std::string value;
     // try to read entry sequentially until end of file or failure
-    while(read_entry(in, type, key, value)) {
+    while (read_entry(in, type, key, value)) {
         callback(type, key, value);
     }
-
 }
 
 void WriteAheadLog::sync() {
@@ -126,7 +127,7 @@ void WriteAheadLog::truncate() {
     out_.close();
     // trunc: truncate, delete all existing content
     out_.open(path_, std::ios::binary | std::ios::trunc);
-    if(!out_.is_open()) {
+    if (!out_.is_open()) {
         throw std::runtime_error("failed to truncate WAL file: " + path_.string());
     }
 }
@@ -140,4 +141,4 @@ std::size_t WriteAheadLog::size() const {
     return std::filesystem::file_size(path_);
 }
 
-} //namespace kvstore
+}  // namespace kvstore

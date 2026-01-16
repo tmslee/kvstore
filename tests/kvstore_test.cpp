@@ -2,15 +2,15 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <string>
 #include <thread>
 #include <vector>
-#include <filesystem>
 
 namespace kvstore::test {
 
 class KVStoreTest : public ::testing::Test {
-protected:
+   protected:
     KVStore store;
 };
 
@@ -145,7 +145,7 @@ TEST_F(KVStoreTest, ConcurrentReadsAndWrites) {
 }
 
 class KVStorePersistenceTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {
         test_dir_ = std::filesystem::temp_directory_path() / "kvstore_test";
         std::filesystem::create_directories(test_dir_);
@@ -158,12 +158,12 @@ protected:
     std::filesystem::path wal_path_;
 };
 
-TEST_F(KVStorePersistenceTest, PersistsAcrossRestarts){
+TEST_F(KVStorePersistenceTest, PersistsAcrossRestarts) {
     {
         kvstore::Options opts;
         opts.persistence_path = wal_path_;
         kvstore::KVStore store(opts);
-        
+
         store.put("key1", "value1");
         store.put("key2", "value2");
     }
@@ -175,14 +175,14 @@ TEST_F(KVStorePersistenceTest, PersistsAcrossRestarts){
         auto result1 = store.get("key1");
         ASSERT_TRUE(result1.has_value());
         EXPECT_EQ(*result1, "value1");
-        
+
         auto result2 = store.get("key2");
         ASSERT_TRUE(result2.has_value());
         EXPECT_EQ(*result2, "value2");
     }
 }
 
-TEST_F(KVStorePersistenceTest, PersistsRemove){
+TEST_F(KVStorePersistenceTest, PersistsRemove) {
     {
         kvstore::Options opts;
         opts.persistence_path = wal_path_;
@@ -203,7 +203,7 @@ TEST_F(KVStorePersistenceTest, PersistsRemove){
     }
 }
 
-TEST_F(KVStorePersistenceTest, PersistsClear){
+TEST_F(KVStorePersistenceTest, PersistsClear) {
     {
         kvstore::Options opts;
         opts.persistence_path = wal_path_;
@@ -226,7 +226,7 @@ TEST_F(KVStorePersistenceTest, PersistsClear){
     }
 }
 
-TEST_F(KVStorePersistenceTest, PersistsOverwrite){
+TEST_F(KVStorePersistenceTest, PersistsOverwrite) {
     {
         kvstore::Options opts;
         opts.persistence_path = wal_path_;
