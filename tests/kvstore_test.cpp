@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <string>
 #include <thread>
 #include <vector>
@@ -141,6 +142,110 @@ TEST_F(KVStoreTest, ConcurrentReadsAndWrites) {
         t.join();
     }
     EXPECT_TRUE(store.contains("shared_key"));
+}
+
+class KVStorePersistenceTest : public ::testing::Test {
+   protected:
+    void SetUp() override {
+        test_dir_ = std::filesystem::temp_directory_path() / "kvstore_test";
+        std::filesystem::create_directories(test_dir_);
+        wal_path_ = test_dir_ / "test.wal";
+    }
+    void TearDown() override {
+        std::filesystem::remove_all(test_dir_);
+    }
+    std::filesystem::path test_dir_;
+    std::filesystem::path wal_path_;
+};
+
+TEST_F(KVStorePersistenceTest, PersistsAcrossRestarts) {
+    {
+        kvstore::Options opts;
+        opts.persistence_path = wal_path_;
+        kvstore::KVStore store(opts);
+
+        store.put("key1", "value1");
+        store.put("key2", "value2");
+    }
+    {
+        kvstore::Options opts;
+        opts.persistence_path = wal_path_;
+        kvstore::KVStore store(opts);
+
+        auto result1 = store.get("key1");
+        ASSERT_TRUE(result1.has_value());
+        EXPECT_EQ(*result1, "value1");
+
+        auto result2 = store.get("key2");
+        ASSERT_TRUE(result2.has_value());
+        EXPECT_EQ(*result2, "value2");
+    }
+}
+
+TEST_F(KVStorePersistenceTest, PersistsRemove) {
+    {
+        kvstore::Options opts;
+        opts.persistence_path = wal_path_;
+        kvstore::KVStore store(opts);
+
+        store.put("key1", "value1");
+        store.put("key2", "value2");
+        (void)store.remove("key1");
+    }
+
+    {
+        kvstore::Options opts;
+        opts.persistence_path = wal_path_;
+        kvstore::KVStore store(opts);
+
+        EXPECT_FALSE(store.contains("key1"));
+        EXPECT_TRUE(store.contains("key2"));
+    }
+}
+
+TEST_F(KVStorePersistenceTest, PersistsClear) {
+    {
+        kvstore::Options opts;
+        opts.persistence_path = wal_path_;
+        kvstore::KVStore store(opts);
+
+        store.put("key1", "value1");
+        store.put("key2", "value2");
+        store.clear();
+        store.put("key3", "value3");
+    }
+
+    {
+        kvstore::Options opts;
+        opts.persistence_path = wal_path_;
+        kvstore::KVStore store(opts);
+
+        EXPECT_FALSE(store.contains("key1"));
+        EXPECT_FALSE(store.contains("key2"));
+        EXPECT_TRUE(store.contains("key3"));
+    }
+}
+
+TEST_F(KVStorePersistenceTest, PersistsOverwrite) {
+    {
+        kvstore::Options opts;
+        opts.persistence_path = wal_path_;
+        kvstore::KVStore store(opts);
+
+        store.put("key1", "value1");
+        store.put("key1", "value2");
+        store.put("key1", "value3");
+    }
+
+    {
+        kvstore::Options opts;
+        opts.persistence_path = wal_path_;
+        kvstore::KVStore store(opts);
+
+        auto result = store.get("key1");
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(*result, "value3");
+    }
 }
 
 }  // namespace kvstore::test

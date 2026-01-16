@@ -2,6 +2,7 @@
 #define KVSTORE_KVSTORE_HPP
 
 #include <cstddef>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
@@ -9,10 +10,16 @@
 
 namespace kvstore {
 
+struct Options {
+    std::optional<std::filesystem::path> persistence_path = std::nullopt;
+};
+
 class KVStore {
    public:
     KVStore();
+    explicit KVStore(const Options& options);
     ~KVStore();
+
     /*
         we delete copies bc this class will hold a mutex internally - cannot be copied.
         also copying a potentially large data store is expesive.

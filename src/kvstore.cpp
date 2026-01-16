@@ -4,12 +4,25 @@
 #include <shared_mutex>
 #include <unordered_map>
 
+#include "kvstore/wal.hpp"
+
 namespace kvstore {
 
 class KVStore::Impl {
    public:
+    Impl() = default;
+    explicit Impl(const Options& options) {
+        if (options.persistence_path.has_value()) {
+            wal_ = std::make_unique<WriteAheadLog>(options.persistence_path.value());
+            recover();
+        }
+    }
+
     void put(std::string_view key, std::string_view value) {
         std::unique_lock lock(mutex_);
+        if (wal_) {
+            wal_->log_put(key, value);
+        }
         data_.insert_or_assign(std::string(key), std::string(value));
     }
 
@@ -23,6 +36,9 @@ class KVStore::Impl {
 
     [[nodiscard]] bool remove(std::string_view key) {
         std::unique_lock lock(mutex_);
+        if (wal_) {
+            wal_->log_remove(key);
+        }
         return data_.erase(std::string(key)) > 0;
     }
 
@@ -43,15 +59,37 @@ class KVStore::Impl {
 
     void clear() noexcept {
         std::unique_lock lock(mutex_);
+        if (wal_) {
+            wal_->log_clear();
+        }
         data_.clear();
     }
 
    private:
+    void recover() {
+        wal_->replay([this](EntryType type, std::string_view key, std::string_view value) {
+            switch (type) {
+                case EntryType::Put:
+                    data_.insert_or_assign(std::string(key), std::string(value));
+                    break;
+                case EntryType::Remove:
+                    data_.erase(std::string(key));
+                    break;
+                case EntryType::Clear:
+                    data_.clear();
+                    break;
+            }
+        });
+    }
+
     mutable std::shared_mutex mutex_;
     std::unordered_map<std::string, std::string> data_;
+    std::unique_ptr<WriteAheadLog> wal_;
 };
 
 KVStore::KVStore() : impl_(std::make_unique<Impl>()) {}
+
+KVStore::KVStore(const Options& options) : impl_(std::make_unique<Impl>(options)) {}
 
 KVStore::~KVStore() = default;
 
