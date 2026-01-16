@@ -1,5 +1,5 @@
 #include "kvstore/kvstore.hpp"
-#include "kvstoore/wal.hpp"
+#include "kvstore/wal.hpp"
 
 #include <mutex>
 #include <shared_mutex>
@@ -80,13 +80,16 @@ private:
             }
         });
     }
-    
+
     mutable std::shared_mutex mutex_;
     std::unordered_map<std::string, std::string> data_;
     std::unique_ptr<WriteAheadLog> wal_;
 };
 
 KVStore::KVStore() : impl_(std::make_unique<Impl>()) {}
+
+KVStore::KVStore(const Options& options)
+    : impl_(std::make_unique<Impl>(options)) {}
 
 KVStore::~KVStore() = default;
 

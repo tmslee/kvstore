@@ -44,8 +44,22 @@ WriteAheadLog::WriteAheadLog(const std::filesystem::path& path)
 }
 
 WriteAheadLog::~WriteAheadLog() = default;
-WriteAheadLog::WriteAheadLog(WriteAhedLog&&) noexcept = default;
-WriteAheadLog& WriteAheadLog::operator=(WriteAheadLog&&) noexcept = default;
+
+/*
+    note: std::mutex cannot be moved/copied.
+    keeping move ctor default makes compiler try to move each member, but mutex cannot be moved
+    manually implement move ctor and assignment.
+    mutex is jsut default constructed fresh in new object
+*/
+WriteAheadLog::WriteAheadLog(WriteAheadLog&& other) noexcept 
+    : path_(std::move(other.path_)), out_(std::move(other.out_)) {}
+WriteAheadLog& WriteAheadLog::operator=(WriteAheadLog&& other) noexcept {
+    if(this != &other) {
+        path_ = std::move(other.path_);
+        out_ = std::move(other.out_);
+    }
+    return *this;
+}
 
 void WriteAheadLog::log_put(std::string_view key, std::string_view value) {
     std::lock_guard lock(mutex_);
@@ -69,7 +83,7 @@ void WriteAheadLog::write_entry(EntryType type, std::string_view key, std::strin
     out_.flush();
 }
 
-bool WriteAheadLog::read_entry(std::ifstrream& in, EntryType& type, std::string& key, std::string&value) {
+bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& key, std::string&value) {
     // we return bool instead of throwing because end of file is expected, not exceptional
     // not being able to read successfully is an expected pattern eventually
     in.read(reinterpret_cast<char*>(&type), sizeof(type));

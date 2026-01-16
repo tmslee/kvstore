@@ -2,7 +2,7 @@
 #define KVSTORE_WAL_HPP
 
 #include <cstdint>
-#include <filesystem
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <mutex>
@@ -44,7 +44,7 @@ public:
             void replay(F&& callback);
     */
     // for recovery (called once at startup) std::function is fine and keeps interface simple
-    void replay(std::function<void(EntryType, std::string_View, std::string_view)> callback);
+    void replay(std::function<void(EntryType, std::string_view, std::string_view)> callback);
 
     void sync();
     void truncate();
@@ -59,7 +59,7 @@ private:
     std::filesystem::path path_;
     std::ofstream out_;
     mutable std::mutex mutex_;
-}
+};
 
 }
 

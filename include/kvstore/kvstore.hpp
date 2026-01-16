@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <filesystem>
 
 namespace kvstore {
 
@@ -16,7 +17,9 @@ struct Options {
 class KVStore {
    public:
     KVStore();
+    explicit KVStore(const Options& options);
     ~KVStore();
+
     /*
         we delete copies bc this class will hold a mutex internally - cannot be copied.
         also copying a potentially large data store is expesive.
