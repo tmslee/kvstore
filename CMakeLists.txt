@@ -42,6 +42,7 @@ add_library(kvstore)
 target_sources(kvstore
     PRIVATE
         src/kvstore.cpp
+        src/wal.cpp
 )
 
 target_include_directories(kvstore

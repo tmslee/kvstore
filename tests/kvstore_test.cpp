@@ -9,7 +9,7 @@
 namespace kvstore::test {
 
 class KVStoreTest : public ::testing::Test {
-   protected:
+protected:
     KVStore store;
 };
 
@@ -141,6 +141,36 @@ TEST_F(KVStoreTest, ConcurrentReadsAndWrites) {
         t.join();
     }
     EXPECT_TRUE(store.contains("shared_key"));
+}
+
+class KVStorePersistenceTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        test_dir_ = std::filesystem::temp_directory_path() / "kvstore_test";
+        std::filesystem::create_directories(test_dir_);
+        wal_path_ = test_dir_ / "test.wal";
+    }
+    void TearDown() override {
+        std::filesystem::remove_all(test_dir_);
+    }
+    std::filesystem::path test_dir_;
+    std::filesystem::path wal_path_;
+};
+
+TEST_F(KVStorePeristenceTest, PersistsAcrossRestarts){
+
+}
+
+TEST_F(KVStorePeristenceTest, PersistsRemove){
+    
+}
+
+TEST_F(KVStorePeristenceTest, PersistsClear){
+    
+}
+
+TEST_F(KVStorePeristenceTest, PersistsOverwrite){
+    
 }
 
 }  // namespace kvstore::test
