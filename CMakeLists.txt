@@ -44,6 +44,7 @@ target_sources(kvstore
         src/kvstore.cpp
         src/wal.cpp
         src/server.cpp
+        src/protocol.cpp
 )
 
 target_include_directories(kvstore

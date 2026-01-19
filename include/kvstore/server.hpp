@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "kvstore/kvstore.hpp"
+#include "kvstore/protocol.hpp"
 
 namespace kvstore {
 
@@ -43,7 +44,7 @@ class Server {
    private:
     void accept_loop();
     void handle_client(int client_fd);
-    std::string process_command(const std::string& line);
+    CommandResult process_command(const std::string& line);
 
     KVStore& store_;
     ServerOptions options_;
