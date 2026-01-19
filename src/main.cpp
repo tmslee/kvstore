@@ -1,19 +1,19 @@
-#include "kvstore/kvstore.hpp"
-#include "kvstore/server.hpp"
-
 #include <csignal>
 #include <iostream>
+
+#include "kvstore/kvstore.hpp"
+#include "kvstore/server.hpp"
 
 namespace {
 kvstore::Server* g_server = nullptr;
 
 void signal_handler(int) {
-    if(g_server != nullptr) {
+    if (g_server != nullptr) {
         g_server->stop();
     }
 }
 
-}// namespace
+}  // namespace
 
 int main() {
     kvstore::Options store_opts;
@@ -34,7 +34,7 @@ int main() {
     server.start();
     std::cout << "Server running. press Ctrl+C to stop.\n";
 
-    while(server.running()) {
+    while (server.running()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 

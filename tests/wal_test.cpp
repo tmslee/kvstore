@@ -7,7 +7,7 @@
 
 namespace kvstore::test {
 class WALTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {
         test_dir_ = std::filesystem::temp_directory_path() / "wal_test";
         std::filesystem::create_directories(test_dir_);
@@ -35,7 +35,7 @@ TEST_F(WALTest, LogAndReplay) {
         });
     }
     ASSERT_EQ(entries.size(), 3);
-        EXPECT_EQ(std::get<0>(entries[0]), EntryType::Put);
+    EXPECT_EQ(std::get<0>(entries[0]), EntryType::Put);
     EXPECT_EQ(std::get<1>(entries[0]), "key1");
     EXPECT_EQ(std::get<2>(entries[0]), "value1");
 
@@ -69,7 +69,7 @@ TEST_F(WALTest, LogClear) {
 }
 
 TEST_F(WALTest, Truncate) {
-        {
+    {
         WriteAheadLog wal(wal_path_);
         wal.log_put("key1", "value1");
         wal.log_put("key2", "value2");
@@ -94,11 +94,9 @@ TEST_F(WALTest, EmptyReplay) {
     WriteAheadLog wal(wal_path_);
 
     int count = 0;
-    wal.replay([&count](EntryType, std::string_view, std::string_view) {
-        ++count;
-    });
+    wal.replay([&count](EntryType, std::string_view, std::string_view) { ++count; });
 
     EXPECT_EQ(count, 0);
 }
 
-} //namespace kvstore::test
+}  // namespace kvstore::test

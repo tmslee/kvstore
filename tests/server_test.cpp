@@ -1,9 +1,7 @@
-#include "kvstore/kvstore.hpp"
 #include "kvstore/server.hpp"
 
-#include <gtest/gtest.h>
-
 #include <arpa/inet.h>
+#include <gtest/gtest.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -12,33 +10,37 @@
 #include <string>
 #include <thread>
 
+#include "kvstore/kvstore.hpp"
+
 namespace kvstore::test {
 class ServerTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {
         store_ = std::make_unique<kvstore::KVStore>();
         kvstore::ServerOptions opts;
-        opts.port = 16379; // test port; avoid conflicts with real redis. ports above 1024 dont need root
+        opts.port =
+            16379;  // test port; avoid conflicts with real redis. ports above 1024 dont need root
         server_ = std::make_unique<kvstore::Server>(*store_, opts);
     }
 
     void TearDown() override {
-        if(server_) {
+        if (server_) {
             server_->stop();
         }
     }
-    
+
     std::string send_command(const std::string& cmd) {
         // test commands are small and responses are small.
-        // in practice, send & receive will both fit in one TCP packet. one call respectively will be sufficient for sending & receiving. we don't need a loop
+        // in practice, send & receive will both fit in one TCP packet. one call respectively will
+        // be sufficient for sending & receiving. we don't need a loop
         /*
             for client implementation:
-            
+
             size_t total_sent = 0;
             while(total_send < msg.size()) {
                 ... handle partial writes
             }
-            
+
             // read until newline
             std::string response:
             char c;
@@ -47,65 +49,65 @@ protected:
             }
         */
         int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if(sock < 0) {
+        if (sock < 0) {
             return "ERROR socket creation failed";
         }
-        
+
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port = htons(16379);
         inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
-        if(connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+        if (connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
             close(sock);
             return "ERROR connection failed";
         }
 
         std::string msg = cmd + "\n";
         send(sock, msg.c_str(), msg.size(), 0);
-        
+
         char buffer[1024];
-        ssize_t n = recv(sock, buffer, sizeof(buffer)-1, 0);
+        ssize_t n = recv(sock, buffer, sizeof(buffer) - 1, 0);
         close(sock);
 
-        if(n <= 0) {
+        if (n <= 0) {
             return "Error no response";
         }
 
         buffer[n] = '\0';
         std::string response(buffer);
-        if(!response.empty() && response.back() == '\n') {
+        if (!response.empty() && response.back() == '\n') {
             response.pop_back();
         }
         return response;
     }
 
-    // we use std::unique_ptr so we can control construction timing in Setup() - if plain members, object would be constructed during fixture construction, before Setup().
-    // also allows tearDown() to destroy early if needed
+    // we use std::unique_ptr so we can control construction timing in Setup() - if plain members,
+    // object would be constructed during fixture construction, before Setup(). also allows
+    // tearDown() to destroy early if needed
     std::unique_ptr<kvstore::KVStore> store_;
     std::unique_ptr<kvstore::Server> server_;
 };
 
-
-TEST_F(ServerTest, Ping){
+TEST_F(ServerTest, Ping) {
     server_->start();
     EXPECT_EQ(send_command("PING"), "PONG");
 }
 
-TEST_F(ServerTest, PutAndGet){
+TEST_F(ServerTest, PutAndGet) {
     server_->start();
 
     EXPECT_EQ(send_command("PUT foo bar"), "OK");
     EXPECT_EQ(send_command("GET foo"), "OK bar");
 }
 
-TEST_F(ServerTest, GetMissing){
+TEST_F(ServerTest, GetMissing) {
     server_->start();
 
     EXPECT_EQ(send_command("GET nonexistent"), "NOT_FOUND");
 }
 
-TEST_F(ServerTest, Delete){
+TEST_F(ServerTest, Delete) {
     server_->start();
 
     EXPECT_EQ(send_command("PUT foo bar"), "OK");
@@ -113,7 +115,7 @@ TEST_F(ServerTest, Delete){
     EXPECT_EQ(send_command("GET foo"), "NOT_FOUND");
 }
 
-TEST_F(ServerTest, Exists){
+TEST_F(ServerTest, Exists) {
     server_->start();
 
     EXPECT_EQ(send_command("EXISTS foo"), "OK 0");
@@ -121,7 +123,7 @@ TEST_F(ServerTest, Exists){
     EXPECT_EQ(send_command("EXISTS foo"), "OK 1");
 }
 
-TEST_F(ServerTest, Size){
+TEST_F(ServerTest, Size) {
     server_->start();
 
     EXPECT_EQ(send_command("SIZE"), "OK 0");
@@ -131,7 +133,7 @@ TEST_F(ServerTest, Size){
     EXPECT_EQ(send_command("SIZE"), "OK 2");
 }
 
-TEST_F(ServerTest, Clear){
+TEST_F(ServerTest, Clear) {
     server_->start();
 
     EXPECT_EQ(send_command("PUT foo bar"), "OK");
@@ -140,13 +142,11 @@ TEST_F(ServerTest, Clear){
     EXPECT_EQ(send_command("SIZE"), "OK 0");
 }
 
-TEST_F(ServerTest, UnkownCommand){
+TEST_F(ServerTest, UnkownCommand) {
     server_->start();
 
     std::string response = send_command("INVALID");
     EXPECT_TRUE(response.find("ERROR") != std::string::npos);
 }
 
-} //namespace kvstore::test
-
-
+}  // namespace kvstore::test
