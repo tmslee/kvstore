@@ -26,6 +26,8 @@ struct ParsedCommand {
 
 class Protocol {
 public:
+    // static functions - no per-instance data (no member variables)
+    // essentially namespaced functions that live inside a class
     [[nodiscard]] static ParsedCommand parse(const std::string& line);
     [[nodiscard]] static std::string serialize(const CommandResult& result);
 
