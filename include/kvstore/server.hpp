@@ -24,6 +24,9 @@ public:
 
     /*
         note on copy&moves:
+        - server owns threads, socket fd, and reference to store. copying is nonsensical.
+        - unclear ownership of KVStore& store_ after move. delete moves
+            - also threads capture this pointer in their lambdas. moving would lead those threads holding dangling pointers to old location
     */
     Server(const Server&) = delete;
     Server& operator=(const Server&) = delete;
