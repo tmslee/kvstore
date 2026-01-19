@@ -64,11 +64,11 @@ void Server::start() {
         6. spawn thread to accept connections
     */ 
 
-    server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
     // AF_INET = IPv4, SOCK_STREAM = TCP
     // socket sctor returns a file descriptor (integer handle)
     // negative means error
-    if(server_fd_ < 0) {
+    if(fd < 0) {
         throw std::runtime_error("failed to create socket");
     }
 
@@ -80,8 +80,8 @@ void Server::start() {
         IPPROTO_TCP (TCP protocol layer) : TCP_NODELAY, TCP_KEEPIDLE ...
         IPPROTO_IP (IP protocol layer) : IP_TTL, IP_MULTICAST_IF ...
     */
-    if(setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        close(server_fd_);
+    if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        close(fd);
         throw std::runtime_error("failed to set socket options");
     }
 
@@ -92,25 +92,26 @@ void Server::start() {
 
     //inet_pton (inet presentation to network) converts string IP("127.0.0.1") to binary format & store in addr.sin_addr
     if(inet_pton(AF_INET, options_.host.c_str(), &addr.sin_addr) <= 0) {
-        close(server_fd_);
+        close(fd);
         throw std::runtime_error("invalid address: " + options_.host);
     }
 
     // bind associated socket with specific address and port
     // before bind, socket exists but has no address -> OS doesnt know where to route incoming packets
     // after bind, socket bound to 127.0.0.1:6379. OS routes packets for that addr/port to this socket
-    if(bind(server_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
-        close(server_fd_);
+    if(bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+        close(fd);
         throw std::runtime_error("failed to bind to port" + std::to_string(options_.port));
     }
     
     // mark socket as listening - SOMAXCONN is max backlog of pending connections
-    if(listen(server_fd_, SOMAXCONN) < 0) {
-        close(server_fd_);
+    if(listen(fd, SOMAXCONN) < 0) {
+        close(fd);
         throw std::runtime_error("failed to listen");
     }
 
     // set running flag, spawn thread to accept connections
+    server_fd_.store(fd);
     running_ = true;
     accept_thread_ = std::thread(&Server::accept_loop, this);
 }
@@ -122,12 +123,12 @@ void Server::stop() {
         return;
     }
     
+    int fd = server_fd_.exchange(-1);
     // shutdown stops reads and writes, unblocking any threads stuck in accept()
     // close releases fd
-    if(server_fd_ >= 0) {
-        shutdown(server_fd_, SHUT_RDWR); // can fail, but we ignore
-        close(server_fd_); //can fail, but we ignroe
-        server_fd_ = -1;
+    if(fd >= 0) {
+        shutdown(fd, SHUT_RDWR); // can fail, but we ignore
+        close(fd); //can fail, but we ignroe
     }
 
     // wait for accept thread to finish
@@ -143,7 +144,6 @@ void Server::stop() {
         }
     }
     client_threads_.clear();
-
     // std::lock_guard ctor can technically throw. rare but possible.
 }
 
@@ -159,6 +159,11 @@ void Server::accept_loop() {
     while(running_) {
         sockaddr_in client_addr{};
         socklen_t client_len = sizeof(client_addr);
+        
+        int fd = server_fd_.load();
+        if(fd < 0) {
+            break;
+        }
         
         int client_fd  = accept(server_fd_, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
         if(client_fd < 0) {

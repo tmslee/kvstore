@@ -47,8 +47,11 @@ private:
     KVStore& store_;
     ServerOptions options_;
 
-    int server_fd_ = -1;
+    std::atomic<int> server_fd_ = -1;
+    //server_fd_ needs to be atomic bc it gets written by main thread in stop()
+    //while its read in accept_loop() by another thread.
     std::atomic<bool> running_ = false;
+    
     std::thread accept_thread_;
     std::vector<std::thread> client_threads_;
     std::mutex clients_mutex_;
