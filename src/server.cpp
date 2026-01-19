@@ -1,4 +1,5 @@
 #include "kvstore/server.hpp"
+#include "kvstore/protocol.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -12,30 +13,6 @@
 #include <stdexcept>
 
 namespace kvstore {
-
-namespace {
-
-std::vector<std::string> split(const std::string& str) {
-    std::vector<std::string> tokens;
-    std::istringstream iss(str);
-    std::string token;
-    while (iss >> token) {
-        tokens.push_back(token);
-    }
-    return tokens;
-}
-
-std::string trim(const std::string& str) {
-    const char* ws = " \t\r\n";
-    auto start = str.find_first_not_of(ws);
-    if (start == std::string::npos) {
-        return "";
-    }
-    auto end = str.find_last_not_of(ws);
-    return str.substr(start, end - start + 1);
-}
-
-}  // namespace
 
 Server::Server(KVStore& store, const ServerOptions& options) : store_(store), options_(options) {}
 
@@ -212,10 +189,16 @@ void Server::handle_client(int client_fd) {
             buffer.erase(0, pos + 1);
 
             // append newline so client can recognize end of response
-            std::string response = process_command(trim(line));
-            response += "\n";
+            CommandResult result = process_command(line);
+            std::string response = Protocol::serialize(result);
+
             // send response. if fail, close and exit.
             if (send(client_fd, response.c_str(), response.size(), 0) < 0) {
+                close(client_fd);
+                return;
+            }
+
+            if(result.close_connection) {
                 close(client_fd);
                 return;
             }
@@ -224,76 +207,69 @@ void Server::handle_client(int client_fd) {
     close(client_fd);
 }
 
-std::string Server::process_command(const std::string& line) {
-    if (line.empty()) {
-        return "ERROR empty command";
+CommandResult Server::process_command(const std::string& line) {
+    ParsedCommand cmd = Protocol::parse(line);
+    if (cmd.command.empty()) {
+        return Protocol::error("empty command");
     }
 
-    auto tokens = split(line);
-    if (tokens.empty()) {
-        return "ERROR empty command";
-    }
-
-    std::string cmd = tokens[0];
-    std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::toupper);
-
-    if (cmd == "GET") {
-        if (tokens.size() != 2) {
-            return "ERROR usage: GET key";
+    if (cmd.command == "GET") {
+        if (tokens.size() != 1) {
+            return Protocol::error("usage: GET key")
         }
-        auto result = store_.get(tokens[1]);
+        auto result = store_.get(cmd.args[0]);
         if (result.has_value()) {
-            return "OK " + *result;
+            return Protocol::ok(*result);
         }
-        return "NOT_FOUND";
+        return Protocol::not_found();
 
-    } else if (cmd == "PUT" || cmd == "SET") {
-        if (tokens.size() < 3) {
-            return "ERROR usage: PUT key value";
+    } else if (cmd.command == "PUT" || cmd.command == "SET") {
+        if (cmd.args.size() < 2) {
+            return Protocol::error("usage: PUT key value");
         }
         std::string value;
-        for (size_t i = 2; i < tokens.size(); i++) {
-            if (i > 2) {
+        for (size_t i = 1; i < cmd.args.size(); i++) {
+            if (i > 1) {
                 value += " ";
             }
-            value += tokens[i];
+            value += cmd.args[i];
         }
-        store_.put(tokens[1], value);
-        return "OK";
+        store_.put(cmd.args[0], value);
+        return Protocol::ok();
 
-    } else if (cmd == "DEL" || cmd == "DELETE" || cmd == "REMOVE") {
-        if (tokens.size() != 2) {
-            return "ERROR usage: DEL key";
+    } else if (cmd.command == "DEL" || cmd.command == "DELETE" || cmd.command == "REMOVE") {
+        if (cmd.args.size() != 1) {
+            return Protocol::error("usage: DEL key");
         }
-        if (store_.remove(tokens[1])) {
-            return "OK";
+        if (store_.remove(cmd.args[1])) {
+            return Protocol::ok();
         }
-        return "NOT_FOUND";
+        return Protocol::not_found();
 
-    } else if (cmd == "EXISTS" || cmd == "CONTAINS") {
-        if (tokens.size() != 2) {
-            return "ERROR usage: EXISTS key";
+    } else if (cmd.command == "EXISTS" || cmd.command == "CONTAINS") {
+        if (cmd.args.size() != 1) {
+            return Protocol::error("usage: EXISTS key");
         }
-        if (store_.contains(tokens[1])) {
-            return "OK 1";
+        if (store_.contains(cmd.args[1])) {
+            return Protocol::ok("1");
         }
-        return "OK 0";
+        return Protocol::ok("0");
 
-    } else if (cmd == "SIZE" || cmd == "COUNT") {
-        return "OK " + std::to_string(store_.size());
+    } else if (cmd.command == "SIZE" || cmd.command == "COUNT") {
+        return Protocol::ok(std::to_string(store_.size()));
 
-    } else if (cmd == "CLEAR") {
+    } else if (cmd.command == "CLEAR") {
         store_.clear();
-        return "OK";
+        return Protocol::ok();
 
-    } else if (cmd == "PING") {
-        return "PONG";
+    } else if (cmd.command == "PING") {
+        return Protocol::ok("PONG");
 
-    } else if (cmd == "QUIT" || cmd == "EXIT") {
-        return "BYE";
+    } else if (cmd.command == "QUIT" || cmd.command == "EXIT") {
+        return Protocol::bye();
     }
 
-    return "ERROR unkown command: " + cmd;
+    return Protocol::error("unkown command: " + cmd.command);
 }
 
 }  // namespace kvstore
