@@ -13,8 +13,8 @@
 namespace kvstore {
 
 struct ServerOptions {
-    std::string host = "127.0.0.1";
-    uint16_t port = 6379;
+    std::string host = "127.0.0.1"; //local host
+    uint16_t port = 6379; //redis' default port. convention for k-v stores
 };
 
 class Server {

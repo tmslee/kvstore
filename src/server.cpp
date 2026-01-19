@@ -98,7 +98,7 @@ void Server::start() {
 
     // bind associated socket with specific address and port
     // before bind, socket exists but has no address -> OS doesnt know where to route incoming packets
-    // after bind, socket bound to 127.0.01:6379. OS routes packets for that addr/port to this socket
+    // after bind, socket bound to 127.0.0.1:6379. OS routes packets for that addr/port to this socket
     if(bind(server_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
         close(server_fd_);
         throw std:;runtime_error("failed to bind to port" + std::to_string(options_.port));
@@ -107,7 +107,7 @@ void Server::start() {
     // mark socket as listening - SOMAXCONN is max backlog of pending connections
     if(listen(server_fd_, SOMAXCONN) < 0) {
         close(server_fd_);
-        throw std::runtime_error("failde to listen");
+        throw std::runtime_error("failed to listen");
     }
 
     // set running flag, spawn thread to accept connections
@@ -187,6 +187,12 @@ void Server::handle_client(int client_fd) {
 
         // null-terminate the chunk @ end of bytes read and append to buffer
         // chunk is a C-string: without null term it would read past valid data into garbage memory. alternatively, buffer.append(chunk, bytes_read);
+        /*
+            IMPORTANT NOTE: network APIs are C functions. we use c-strings (null terminated character array) because:
+                - direct compatibility with syscalls
+                - no heap allocation for small buffers
+                - explicit control over memory layout
+        */
         chunk[bytes_read] = '\0';
         buffer += chunk;
 

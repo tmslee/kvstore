@@ -193,6 +193,21 @@ TEST_F(KVStorePersistenceTest, PersistsRemove) {
         (void)store.remove("key1");
     }
 
+    {
+        kvstore::Options opts;
+        opts.persistence_path = wal_path_;
+        kvstore::KVStore store(opts);
+
+        EXPECT_FALSE(store.contains("key1"));
+        EXPECT_TRUE(store.contains("key2"));
+    }
+}
+
+TEST_F(KVStorePersistenceTest, PersistsClear) {
+    {
+        kvstore::Options opts;
+        opts.persistence_path = wal_path_;
+        kvstore::KVStore store(opts);
 
         store.put("key1", "value1");
         store.put("key2", "value2");

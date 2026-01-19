@@ -16,32 +16,145 @@ namespace kvstore::test {
 class ServerTest : public ::testing::Test {
 protected:
     void Setup() override {
-
+        store_ = std::make_unique<kvstore::KVStore>();
+        kvstore::ServerOptions opts;
+        opts.port = 16379; // test port; avoid conflicts with real redis. ports above 1024 dont need root
+        server_ = std::make_unique<kvstore::Server>(*store_, opts);
     }
-    void TearDown() override {
 
+    void TearDown() override {
+        if(server_) {
+            server_->stop();
+        }
     }
     
     std::string send_command(const std::string& cmd) {
+        // test commands are small and responses are small.
+        // in practice, send & receive will both fit in one TCP packet. one call respectively will be sufficient for sending & receiving. we don't need a loop
+        /*
+            for client implementation:
+            
+            size_t total_sent = 0;
+            while(total_send < msg.size()) {
+                ... handle partial writes
+            }
+            
+            // read until newline
+            std::string response:
+            char c;
+            while(recv(sock, &c, 1, 0) == 1 && c != '\n) {
+                response += c;
+            }
+        */
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if(sock < 0) {
+            return "ERROR socket creation failed";
+        }
+        
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(16379);
+        inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
+        if(connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+            close(sock);
+            return "ERROR connection failed";
+        }
+
+        std::string msg = cmd + "\n";
+        send(sock, msg.c_str(), msg.size(), 0);
+        
+        char buffer[1024];
+        ssize_t n = recv(sock, buffer, sizeof(buffer)-1, 0);
+        close(sock);
+
+        if(n <= 0) {
+            return "Error no response";
+        }
+
+        buffer[n] = '\0';
+        std::string response(buffer);
+        if(!response.empty() && response.back() == '\n') {
+            response.pop_back();
+        }
+        return response;
     }
+
+    // we use std::unique_ptr so we can control construction timing in Setup() - if plain members, object would be constructed during fixture construction, before Setup().
+    // also allows tearDown() to destroy early if needed
+    std::unique_ptr<kvstore::KVStore> store_;
+    std::unique_ptr<kvstore::Server> server_;
 };
 
-TEST_F(ServerTest, Ping){}
+// note we sleep briefly after server start because accept loop might not be ready yet.
 
-TEST_F(ServerTest, PutAndGet){}
+TEST_F(ServerTest, Ping){
+    server_->start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    EXPECT_EQ(send_comman("PING"), "PONG");
+}
 
-TEST_F(ServerTest, GetMissing){}
+TEST_F(ServerTest, PutAndGet){
+    server_->start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-TEST_F(ServerTest, Delete){}
+    EXPECT_EQ(send_command("PUT foo bar"), "OK");
+    EXPECT_EQ(send_command("GET foo"), "OK bar");
+}
 
-TEST_F(ServerTest, Exists){}
+TEST_F(ServerTest, GetMissing){
+    server_->start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-TEST_F(ServerTest, Size){}
+    EXPECT_EQ(send_command("GET nonexistent"), "NOT_FOUND");
+}
 
-TEST_F(ServerTest, Clear){}
+TEST_F(ServerTest, Delete){
+    server_->start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-TEST_F(ServerTest, UnkownCommand){}
+    EXPECT_EQ(send_command("PUT foo bar"), "OK");
+    EXPECT_EQ(send_command("DEL foo"), "OK");
+    EXPECT_EQ(send_command("GET foo"), "NOT_FOUND");
+}
+
+TEST_F(ServerTest, Exists){
+    server_->start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    EXPECT_EQ(send_command("EXISTS foo"), "OK 0");
+    EXPECT_EQ(send_command("PUT foo bar"), "OK");
+    EXPECT_EQ(send_command("EXISTS foo"), "OK 1");
+}
+
+TEST_F(ServerTest, Size){
+    server_->start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    EXPECT_EQ(send_command("SIZE"), "OK 0");
+    EXPECT_EQ(send_command("PUT foo bar"), "OK");
+    EXPECT_EQ(send_command("SIZE"), "OK 1");
+    EXPECT_EQ(send_command("PUT baz qux"), "OK");
+    EXPECT_EQ(send_command("SIZE"), "OK 2");
+}
+
+TEST_F(ServerTest, Clear){
+    server_->start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    EXPECT_EQ(send_command("PUT foo bar"), "OK");
+    EXPECT_EQ(send_command("PUT baz qux"), "OK");
+    EXPECT_EQ(send_command("CLEAR"), "OK");
+    EXPECT_EQ(send_command("SIZE"), "OK 0");
+}
+
+TEST_F(ServerTest, UnkownCommand){
+    server_->start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    std::string response = send_command("INVALID");
+    EXPECT_TRUE(response.find("ERROR") != std::string::npos);
+}
 
 } //namespace kvstore::test
 
