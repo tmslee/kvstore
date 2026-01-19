@@ -19,7 +19,7 @@ struct ServerOptions {
 
 class Server {
 public:
-    Server(KVSttore& store, const ServerOptions& options = {});
+    Server(KVStore& store, const ServerOptions& options = {});
     ~Server();
 
     /*
@@ -47,12 +47,12 @@ private:
     KVStore& store_;
     ServerOptions options_;
 
-    int server_fd = -1;
+    int server_fd_ = -1;
     std::atomic<bool> running_ = false;
     std::thread accept_thread_;
     std::vector<std::thread> client_threads_;
     std::mutex clients_mutex_;
-}
+};
 
 } //namespace kvstore
 

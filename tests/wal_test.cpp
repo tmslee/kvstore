@@ -8,7 +8,7 @@
 namespace kvstore::test {
 class WALTest : public ::testing::Test {
 protected:
-    void Setup() override {
+    void SetUp() override {
         test_dir_ = std::filesystem::temp_directory_path() / "wal_test";
         std::filesystem::create_directories(test_dir_);
         wal_path_ = test_dir_ / "test.wal";
@@ -30,9 +30,9 @@ TEST_F(WALTest, LogAndReplay) {
     std::vector<std::tuple<EntryType, std::string, std::string>> entries;
     {
         WriteAheadLog wal(wal_path_);
-        wal.replay([&entries](EntryType type, std::string_view key, std;:string_view value) {
-            entries.emplace_back(type, std::string(key), std:;string(value));
-        })
+        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value) {
+            entries.emplace_back(type, std::string(key), std::string(value));
+        });
     }
     ASSERT_EQ(entries.size(), 3);
         EXPECT_EQ(std::get<0>(entries[0]), EntryType::Put);

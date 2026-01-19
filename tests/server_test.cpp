@@ -5,8 +5,8 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <sys.socket.h>
-#include <uninstd.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include <memory>
 #include <string>
@@ -15,7 +15,7 @@
 namespace kvstore::test {
 class ServerTest : public ::testing::Test {
 protected:
-    void Setup() override {
+    void SetUp() override {
         store_ = std::make_unique<kvstore::KVStore>();
         kvstore::ServerOptions opts;
         opts.port = 16379; // test port; avoid conflicts with real redis. ports above 1024 dont need root
@@ -89,7 +89,7 @@ protected:
 
 TEST_F(ServerTest, Ping){
     server_->start();
-    EXPECT_EQ(send_comman("PING"), "PONG");
+    EXPECT_EQ(send_command("PING"), "PONG");
 }
 
 TEST_F(ServerTest, PutAndGet){

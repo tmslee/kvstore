@@ -31,7 +31,7 @@ std::string trim(const std::string& str) {
     if(start == std::string::npos) {
         return "";
     }
-    auto end = std.find_last_not_of(ws);
+    auto end = str.find_last_not_of(ws);
     return str.substr(start, end-start+1);
 }
 
@@ -64,7 +64,7 @@ void Server::start() {
         6. spawn thread to accept connections
     */ 
 
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
     // AF_INET = IPv4, SOCK_STREAM = TCP
     // socket sctor returns a file descriptor (integer handle)
     // negative means error
@@ -101,7 +101,7 @@ void Server::start() {
     // after bind, socket bound to 127.0.0.1:6379. OS routes packets for that addr/port to this socket
     if(bind(server_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
         close(server_fd_);
-        throw std:;runtime_error("failed to bind to port" + std::to_string(options_.port));
+        throw std::runtime_error("failed to bind to port" + std::to_string(options_.port));
     }
     
     // mark socket as listening - SOMAXCONN is max backlog of pending connections
@@ -112,7 +112,7 @@ void Server::start() {
 
     // set running flag, spawn thread to accept connections
     running_ = true;
-    accept_thread_ = std::thread(&Server::acceept_loop, this);
+    accept_thread_ = std::thread(&Server::accept_loop, this);
 }
 
 void Server::stop() {
@@ -229,11 +229,11 @@ std::string Server::process_command(const std::string& line) {
     std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::toupper);
 
     if(cmd == "GET") {
-        if( cokens.size() != 2) {
+        if(tokens.size() != 2) {
             return "ERROR usage: GET key";
         }
         auto result = store_.get(tokens[1]);
-        if (result.has_value()) {
+        if(result.has_value()) {
             return "OK " + *result;
         }
         return "NOT_FOUND";
@@ -265,7 +265,7 @@ std::string Server::process_command(const std::string& line) {
         if(tokens.size() != 2) {
             return "ERROR usage: EXISTS key";
         }
-        if(store_contains(tokens[1])){
+        if(store_.contains(tokens[1])){
             return "OK 1";
         }
         return "OK 0";

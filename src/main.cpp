@@ -19,7 +19,7 @@ int main() {
     kvstore::Options store_opts;
     store_opts.persistence_path = "data.wal";
 
-    kvstore::KVStore store(store_ops);
+    kvstore::KVStore store(store_opts);
 
     kvstore::ServerOptions server_opts;
     server_opts.port = 6379;
@@ -28,7 +28,7 @@ int main() {
     g_server = &server;
 
     std::signal(SIGINT, signal_handler);
-    std::signal(SIFTERM, signal_handler);
+    std::signal(SIGTERM, signal_handler);
 
     std::cout << "Starting kvstore server on port " << server_opts.port << "...\n";
     server.start();
