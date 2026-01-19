@@ -32,14 +32,14 @@ ParsedCommand Protocol::parse(const std::string& line) {
         result.command = to_upper(token);
     }
     while(iss >> token) {
-        results.args.push_back(token);
+        result.args.push_back(token);
     }
     return result;
 }
 
 std::string Protocol::serialize(const CommandResult& result) {
     std::string output;
-    switch(results.status) {
+    switch(result.status) {
         case StatusCode::Ok:
             output = "OK";
             break;
@@ -54,7 +54,7 @@ std::string Protocol::serialize(const CommandResult& result) {
             break;
     }
     if(!result.message.empty()) {
-        output += " " + results.message; 
+        output += " " + result.message; 
     }
     output += "\n";
     return output;

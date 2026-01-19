@@ -214,8 +214,8 @@ CommandResult Server::process_command(const std::string& line) {
     }
 
     if (cmd.command == "GET") {
-        if (tokens.size() != 1) {
-            return Protocol::error("usage: GET key")
+        if (cmd.args.size() != 1) {
+            return Protocol::error("usage: GET key");
         }
         auto result = store_.get(cmd.args[0]);
         if (result.has_value()) {
@@ -241,7 +241,7 @@ CommandResult Server::process_command(const std::string& line) {
         if (cmd.args.size() != 1) {
             return Protocol::error("usage: DEL key");
         }
-        if (store_.remove(cmd.args[1])) {
+        if (store_.remove(cmd.args[0])) {
             return Protocol::ok();
         }
         return Protocol::not_found();
@@ -250,7 +250,7 @@ CommandResult Server::process_command(const std::string& line) {
         if (cmd.args.size() != 1) {
             return Protocol::error("usage: EXISTS key");
         }
-        if (store_.contains(cmd.args[1])) {
+        if (store_.contains(cmd.args[0])) {
             return Protocol::ok("1");
         }
         return Protocol::ok("0");

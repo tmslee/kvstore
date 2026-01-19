@@ -25,10 +25,10 @@ target_link_libraries(server_test
         GTest::gtest_main
 )
 
-add_executable(server_test
+add_executable(protocol_test
     protocol_test.cpp
 )
-target_link_libraries(server_test
+target_link_libraries(protocol_test
     PRIVATE
         kvstore
         GTest::gtest_main
