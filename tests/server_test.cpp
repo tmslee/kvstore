@@ -86,17 +86,14 @@ protected:
     std::unique_ptr<kvstore::Server> server_;
 };
 
-// note we sleep briefly after server start because accept loop might not be ready yet.
 
 TEST_F(ServerTest, Ping){
     server_->start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
     EXPECT_EQ(send_comman("PING"), "PONG");
 }
 
 TEST_F(ServerTest, PutAndGet){
     server_->start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     EXPECT_EQ(send_command("PUT foo bar"), "OK");
     EXPECT_EQ(send_command("GET foo"), "OK bar");
@@ -104,14 +101,12 @@ TEST_F(ServerTest, PutAndGet){
 
 TEST_F(ServerTest, GetMissing){
     server_->start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     EXPECT_EQ(send_command("GET nonexistent"), "NOT_FOUND");
 }
 
 TEST_F(ServerTest, Delete){
     server_->start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     EXPECT_EQ(send_command("PUT foo bar"), "OK");
     EXPECT_EQ(send_command("DEL foo"), "OK");
@@ -120,7 +115,6 @@ TEST_F(ServerTest, Delete){
 
 TEST_F(ServerTest, Exists){
     server_->start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     EXPECT_EQ(send_command("EXISTS foo"), "OK 0");
     EXPECT_EQ(send_command("PUT foo bar"), "OK");
@@ -129,7 +123,6 @@ TEST_F(ServerTest, Exists){
 
 TEST_F(ServerTest, Size){
     server_->start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     EXPECT_EQ(send_command("SIZE"), "OK 0");
     EXPECT_EQ(send_command("PUT foo bar"), "OK");
@@ -140,7 +133,6 @@ TEST_F(ServerTest, Size){
 
 TEST_F(ServerTest, Clear){
     server_->start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     EXPECT_EQ(send_command("PUT foo bar"), "OK");
     EXPECT_EQ(send_command("PUT baz qux"), "OK");
@@ -150,7 +142,6 @@ TEST_F(ServerTest, Clear){
 
 TEST_F(ServerTest, UnkownCommand){
     server_->start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     std::string response = send_command("INVALID");
     EXPECT_TRUE(response.find("ERROR") != std::string::npos);

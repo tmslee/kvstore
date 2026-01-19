@@ -188,7 +188,7 @@ void Server::handle_client(int client_fd) {
         // null-terminate the chunk @ end of bytes read and append to buffer
         // chunk is a C-string: without null term it would read past valid data into garbage memory. alternatively, buffer.append(chunk, bytes_read);
         /*
-            IMPORTANT NOTE: network APIs are C functions. we use c-strings (null terminated character array) because:
+            IMPORTANT NOTE: network APIs are C functions. we use c-strings (null terminated character) because:
                 - direct compatibility with syscalls
                 - no heap allocation for small buffers
                 - explicit control over memory layout
