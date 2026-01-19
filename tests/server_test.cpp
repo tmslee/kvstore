@@ -91,7 +91,7 @@ class ServerTest : public ::testing::Test {
 
 TEST_F(ServerTest, Ping) {
     server_->start();
-    EXPECT_EQ(send_command("PING"), "PONG");
+    EXPECT_EQ(send_command("PING"), "OK PONG");
 }
 
 TEST_F(ServerTest, PutAndGet) {
