@@ -22,13 +22,16 @@ public:
     Server(KVSttore& store, const ServerOptions& options = {});
     ~Server();
 
+    /*
+        note on copy&moves:
+    */
     Server(const Server&) = delete;
     Server& operator=(const Server&) = delete;
     Server(Server&&) = delete;
     Server& operator=(Server&&) = delete;
 
     void start();
-    void stop();
+    void stop(); 
 
     [[nodiscard]] bool running() const noexcept;
     [[nodiscard]] uint16_t port() const noexcept;
