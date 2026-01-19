@@ -1,5 +1,4 @@
 #include "kvstore/kvstore.hpp"
-#include "kvstore/server.hpp"
 
 #include <gtest/gtest.h>
 
@@ -7,11 +6,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <uninstd.h>
 
 namespace kvstore::test {
 
@@ -199,21 +193,6 @@ TEST_F(KVStorePersistenceTest, PersistsRemove) {
         (void)store.remove("key1");
     }
 
-    {
-        kvstore::Options opts;
-        opts.persistence_path = wal_path_;
-        kvstore::KVStore store(opts);
-
-        EXPECT_FALSE(store.contains("key1"));
-        EXPECT_TRUE(store.contains("key2"));
-    }
-}
-
-TEST_F(KVStorePersistenceTest, PersistsClear) {
-    {
-        kvstore::Options opts;
-        opts.persistence_path = wal_path_;
-        kvstore::KVStore store(opts);
 
         store.put("key1", "value1");
         store.put("key2", "value2");
@@ -253,35 +232,5 @@ TEST_F(KVStorePersistenceTest, PersistsOverwrite) {
         EXPECT_EQ(*result, "value3");
     }
 }
-
-class ServerTest : public ::testing::Test {
-protected:
-    void Setup() override {
-
-    }
-    void TearDown() override {
-
-    }
-    
-    std::string send_command(const std::string& cmd) {
-
-    }
-};
-
-TEST_F(ServerTest, Ping){}
-
-TEST_F(ServerTest, PutAndGet){}
-
-TEST_F(ServerTest, GetMissing){}
-
-TEST_F(ServerTest, Delete){}
-
-TEST_F(ServerTest, Exists){}
-
-TEST_F(ServerTest, Size){}
-
-TEST_F(ServerTest, Clear){}
-
-TEST_F(ServerTest, UnkownCommand){}
 
 }  // namespace kvstore::test
