@@ -1,5 +1,4 @@
 #include "kvstore/server.hpp"
-#include "kvstore/protocol.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -11,6 +10,8 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+
+#include "kvstore/protocol.hpp"
 
 namespace kvstore {
 
@@ -198,7 +199,7 @@ void Server::handle_client(int client_fd) {
                 return;
             }
 
-            if(result.close_connection) {
+            if (result.close_connection) {
                 close(client_fd);
                 return;
             }

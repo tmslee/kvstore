@@ -25,7 +25,7 @@ struct ParsedCommand {
 };
 
 class Protocol {
-public:
+   public:
     // static functions - no per-instance data (no member variables)
     // essentially namespaced functions that live inside a class
     [[nodiscard]] static ParsedCommand parse(const std::string& line);
@@ -38,6 +38,6 @@ public:
     [[nodiscard]] static CommandResult bye();
 };
 
-} //namespace kvstore
+}  // namespace kvstore
 
 #endif

@@ -1,9 +1,6 @@
 #ifndef KVSTORE_SERVER_HPP
 #define KVSTORE_SERVER_HPP
 
-#include "kvstore/kvstore.hpp"
-#include "kvstore/protocol.hpp"
-
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -11,7 +8,8 @@
 #include <thread>
 #include <vector>
 
-
+#include "kvstore/kvstore.hpp"
+#include "kvstore/protocol.hpp"
 
 namespace kvstore {
 

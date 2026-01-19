@@ -84,4 +84,4 @@ TEST(ProtocolTest, ErrorDoesNotCloseConnection) {
     EXPECT_FALSE(Protocol::error("err").close_connection);
 }
 
-} //namespace kvstore::test
+}  // namespace kvstore::test
