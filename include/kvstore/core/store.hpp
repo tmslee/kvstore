@@ -1,5 +1,5 @@
-#ifndef KVSTORE_KVSTORE_HPP
-#define KVSTORE_KVSTORE_HPP
+#ifndef KVSTORE_CORE_STORE_HPP
+#define KVSTORE_CORE_STORE_HPP
 
 #include <cstddef>
 #include <filesystem>
@@ -8,17 +8,17 @@
 #include <string>
 #include <string_view>
 
-namespace kvstore {
+namespace kvstore::core {
 
-struct Options {
+struct StoreOptions {
     std::optional<std::filesystem::path> persistence_path = std::nullopt;
 };
 
-class KVStore {
+class Store {
    public:
-    KVStore();
-    explicit KVStore(const Options& options);
-    ~KVStore();
+    Store();
+    explicit Store(const StoreOptions& options);
+    ~Store();
 
     /*
         we delete copies bc this class will hold a mutex internally - cannot be copied.
@@ -26,15 +26,15 @@ class KVStore {
         if someone truly needs a copy, they should be explicit abt it (we can provide clone()
        method)
     */
-    KVStore(const KVStore&) = delete;
-    KVStore& operator=(const KVStore&) = delete;
+    Store(const Store&) = delete;
+    Store& operator=(const Store&) = delete;
     /*
         standard containers (i.e. std::vector) check if your move ops are noexcept before
        reallocation if your ctor can throw, vector::push_back will copy instead of move for
        exception safety noexcept moves enable optimal container behavior
     */
-    KVStore(KVStore&&) noexcept;
-    KVStore& operator=(KVStore&&) noexcept;
+    Store(Store&&) noexcept;
+    Store& operator=(Store&&) noexcept;
 
     /*
         put: allocates memory -> can throw
@@ -69,6 +69,6 @@ class KVStore {
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace kvstore
+}  // namespace kvstore::core
 
 #endif

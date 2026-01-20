@@ -1,4 +1,4 @@
-#include "kvstore/client.hpp"
+#include "kvstore/net/client.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -7,7 +7,7 @@
 
 #include <stdexcept>
 
-namespace kvstore {
+namespace kvstore::net {
 
 Client::Client(const ClientOptions& options) : options_(options) {}
 
@@ -200,4 +200,4 @@ bool Client::ping() {
     }
 }
 
-}  // namespace kvstore
+}  // namespace kvstore::net

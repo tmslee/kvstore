@@ -1,12 +1,12 @@
-#ifndef KVSTORE_CLIENT_HPP
-#define KVSTORE_CLIENT_HPP
+#ifndef KVSTORE_NET_CLIENT_HPP
+#define KVSTORE_NET_CLIENT_HPP
 
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
 
-namespace kvstore {
+namespace kvstore::net {
 
 struct ClientOptions {
     std::string host = "127.0.0.1";
@@ -62,6 +62,6 @@ class Client {
     int socket_fd_ = -1;
 };
 
-}  // namespace kvstore
+}  // namespace kvstore::net
 
 #endif

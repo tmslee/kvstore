@@ -1,5 +1,5 @@
-#ifndef KVSTORE_WAL_HPP
-#define KVSTORE_WAL_HPP
+#ifndef KVSTORE_CORE_WAL_HPP
+#define KVSTORE_CORE_WAL_HPP
 
 #include <cstdint>
 #include <filesystem>
@@ -9,7 +9,7 @@
 #include <string>
 #include <string_view>
 
-namespace kvstore {
+namespace kvstore::core {
 
 enum class EntryType : uint8_t { Put = 1, Remove = 2, Clear = 3 };
 
@@ -59,6 +59,6 @@ class WriteAheadLog {
     mutable std::mutex mutex_;
 };
 
-}  // namespace kvstore
+}  // namespace kvstore::core
 
 #endif

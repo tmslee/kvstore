@@ -1,9 +1,9 @@
-#include "kvstore/protocol.hpp"
+#include "kvstore/net/protocol.hpp"
 
 #include <algorithm>
 #include <sstream>
 
-namespace kvstore {
+namespace kvstore::net {
 
 namespace {
 std::string trim(const std::string& str) {
@@ -80,4 +80,4 @@ CommandResult Protocol::bye() {
     return {StatusCode::Bye, "", true};
 }
 
-}  // namespace kvstore
+}  // namespace kvstore::net

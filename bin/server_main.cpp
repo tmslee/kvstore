@@ -1,11 +1,11 @@
 #include <csignal>
 #include <iostream>
 
-#include "kvstore/kvstore.hpp"
-#include "kvstore/server.hpp"
+#include "kvstore/core/store.hpp"
+#include "kvstore/net/server.hpp"
 
 namespace {
-kvstore::Server* g_server = nullptr;
+kvstore::net::Server* g_server = nullptr;
 
 void signal_handler(int) {
     if (g_server != nullptr) {
@@ -16,15 +16,15 @@ void signal_handler(int) {
 }  // namespace
 
 int main() {
-    kvstore::Options store_opts;
+    kvstore::core::StoreOptions store_opts;
     store_opts.persistence_path = "data.wal";
 
-    kvstore::KVStore store(store_opts);
+    kvstore::core::Store store(store_opts);
 
-    kvstore::ServerOptions server_opts;
+    kvstore::net::ServerOptions server_opts;
     server_opts.port = 6379;
 
-    kvstore::Server server(store, server_opts);
+    kvstore::net::Server server(store, server_opts);
     g_server = &server;
 
     std::signal(SIGINT, signal_handler);

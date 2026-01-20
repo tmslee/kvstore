@@ -1,11 +1,11 @@
-#include "kvstore/wal.hpp"
+#include "kvstore/core/wal.hpp"
 
 #include <gtest/gtest.h>
 
 #include <filesystem>
 #include <vector>
 
-namespace kvstore::test {
+namespace kvstore::core::test {
 class WALTest : public ::testing::Test {
    protected:
     void SetUp() override {
@@ -99,4 +99,4 @@ TEST_F(WALTest, EmptyReplay) {
     EXPECT_EQ(count, 0);
 }
 
-}  // namespace kvstore::test
+}  // namespace kvstore::core::test

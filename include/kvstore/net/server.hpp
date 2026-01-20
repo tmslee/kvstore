@@ -1,5 +1,5 @@
-#ifndef KVSTORE_SERVER_HPP
-#define KVSTORE_SERVER_HPP
+#ifndef KVSTORE_NET_SERVER_HPP
+#define KVSTORE_NET_SERVER_HPP
 
 #include <atomic>
 #include <cstdint>
@@ -8,10 +8,10 @@
 #include <thread>
 #include <vector>
 
-#include "kvstore/kvstore.hpp"
-#include "kvstore/protocol.hpp"
+#include "kvstore/core/store.hpp"
+#include "kvstore/net/protocol.hpp"
 
-namespace kvstore {
+namespace kvstore::net {
 
 struct ServerOptions {
     std::string host = "127.0.0.1";  // local host
@@ -20,13 +20,13 @@ struct ServerOptions {
 
 class Server {
    public:
-    Server(KVStore& store, const ServerOptions& options = {});
+    Server(core::Store& store, const ServerOptions& options = {});
     ~Server();
 
     /*
         note on copy&moves:
         - server owns threads, socket fd, and reference to store. copying is nonsensical.
-        - unclear ownership of KVStore& store_ after move. delete moves
+        - unclear ownership of core::Store& store_ after move. delete moves
             - also threads capture this pointer in their lambdas. moving would lead those threads
        holding dangling pointers to old location
     */
@@ -46,7 +46,7 @@ class Server {
     void handle_client(int client_fd);
     CommandResult process_command(const std::string& line);
 
-    KVStore& store_;
+    core::Store& store_;
     ServerOptions options_;
 
     std::atomic<int> server_fd_ = -1;
@@ -59,6 +59,6 @@ class Server {
     std::mutex clients_mutex_;
 };
 
-}  // namespace kvstore
+}  // namespace kvstore::net
 
 #endif

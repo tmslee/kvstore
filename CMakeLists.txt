@@ -41,11 +41,11 @@ add_library(kvstore)
 
 target_sources(kvstore
     PRIVATE
-        src/kvstore.cpp
-        src/wal.cpp
-        src/server.cpp
-        src/protocol.cpp
-        src/client.cpp
+        src/core/store.cpp
+        src/core/wal.cpp
+        src/net/server.cpp
+        src/net/protocol.cpp
+        src/net/client.cpp
 )
 
 target_include_directories(kvstore
@@ -55,7 +55,7 @@ target_include_directories(kvstore
 )
 
 add_executable(kvstore-server
-    src/main.cpp
+    bin/server_main.cpp
 )
 
 target_link_libraries(kvstore-server
