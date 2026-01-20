@@ -15,7 +15,7 @@ uint32_t read_uint32(std::istream& in) {
     return value;
 }
 
-void write_int64(std::ostream&out, int64_t value) {
+void write_int64(std::ostream& out, int64_t value) {
     out.write(reinterpret_cast<const char*>(&value), sizeof(value));
 }
 
@@ -76,7 +76,8 @@ void WriteAheadLog::log_put(std::string_view key, std::string_view value) {
     write_entry(EntryType::Put, key, value);
 }
 
-void WriteAheadLog::log_put_with_ttl(std::string_view key, std::string_view value, int64_t expires_at_ms) {
+void WriteAheadLog::log_put_with_ttl(std::string_view key, std::string_view value,
+                                     int64_t expires_at_ms) {
     std::lock_guard lock(mutex_);
     write_entry_with_ttl(EntryType::PutWithTTL, key, value, expires_at_ms);
 }
@@ -97,7 +98,8 @@ void WriteAheadLog::write_entry(EntryType type, std::string_view key, std::strin
     out_.flush();
 }
 
-void WriteAheadLog::write_entry_with_ttl(EntryType type, std::string_view key, std::string_view value, int64_t expires_at_ms) {
+void WriteAheadLog::write_entry_with_ttl(EntryType type, std::string_view key,
+                                         std::string_view value, int64_t expires_at_ms) {
     out_.write(reinterpret_cast<const char*>(&type), sizeof(type));
     write_string(out_, key);
     write_string(out_, value);
@@ -119,9 +121,9 @@ bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& 
     if (!read_string(in, value)) {
         return false;
     }
-    if(type == EntryType::PutWithTTL) {
+    if (type == EntryType::PutWithTTL) {
         expires_at = read_int64(in);
-        if(!in.good()) {
+        if (!in.good()) {
             return false;
         }
     } else {

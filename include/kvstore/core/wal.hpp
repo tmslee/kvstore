@@ -12,14 +12,9 @@
 
 namespace kvstore::core {
 
-enum class EntryType : uint8_t { 
-        Put = 1, 
-        PutWithTTL=2, 
-        Remove = 3, 
-        Clear = 4 
-};
+enum class EntryType : uint8_t { Put = 1, PutWithTTL = 2, Remove = 3, Clear = 4 };
 
-using ExpirationTime = std::optional<int64_t>; //milliseconds since epoch or nullopt
+using ExpirationTime = std::optional<int64_t>;  // milliseconds since epoch or nullopt
 
 class WriteAheadLog {
    public:
@@ -50,7 +45,8 @@ class WriteAheadLog {
             void replay(F&& callback);
     */
     // for recovery (called once at startup) std::function is fine and keeps interface simple
-    void replay(std::function<void(EntryType, std::string_view, std::string_view, ExpirationTime)> callback);
+    void replay(std::function<void(EntryType, std::string_view, std::string_view, ExpirationTime)>
+                    callback);
 
     void sync();
     void truncate();
@@ -60,7 +56,8 @@ class WriteAheadLog {
 
    private:
     void write_entry(EntryType type, std::string_view key, std::string_view value);
-    void write_entry_with_ttl(EntryType type, std::string_view key, std::string_view value, int64_t expires_at_ms);
+    void write_entry_with_ttl(EntryType type, std::string_view key, std::string_view value,
+                              int64_t expires_at_ms);
 
     [[nodiscard]] bool read_entry(std::ifstream& in, EntryType& type, std::string& key,
                                   std::string& value, ExpirationTime& expires_at);

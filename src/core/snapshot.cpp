@@ -37,7 +37,7 @@ uint32_t read_uint32(std::istream& in) {
     return value;
 }
 
-void write_int64(std::ostream&out, int64_t value) {
+void write_int64(std::ostream& out, int64_t value) {
     out.write(reinterpret_cast<const char*>(&value), sizeof(value));
 }
 
@@ -63,7 +63,7 @@ bool read_string(std::istream& in, std::string& str) {
 }
 
 constexpr uint32_t kMagic = 0x4B565353;  // "KVSS"
-constexpr uint32_t kVersion = 2; // bumped for TTL support
+constexpr uint32_t kVersion = 2;         // bumped for TTL support
 
 }  // namespace
 
@@ -90,12 +90,13 @@ void Snapshot::save(const EntryIterator& iterate) {
 
         std::size_t count = 0;
         // call iterator & pass the lambda which is the entry emitter
-        iterate([&out, &count](std::string_view key, std::string_view value, ExpirationTime expires_at) {
+        iterate([&out, &count](std::string_view key, std::string_view value,
+                               ExpirationTime expires_at) {
             write_string(out, key);
             write_string(out, value);
             uint8_t has_expiration = expires_at.has_value() ? 1 : 0;
             out.write(reinterpret_cast<const char*>(&has_expiration), sizeof(has_expiration));
-            if(expires_at.has_value()) {
+            if (expires_at.has_value()) {
                 write_int64(out, expires_at.value());
             }
             ++count;
@@ -119,7 +120,8 @@ void Snapshot::save(const EntryIterator& iterate) {
     std::filesystem::rename(temp_path, path_);
 }
 
-void Snapshot::load(std::function<void(std::string_view, std::string_view, ExpirationTime)> callback) {
+void Snapshot::load(
+    std::function<void(std::string_view, std::string_view, ExpirationTime)> callback) {
     std::ifstream in(path_, std::ios::binary);
     if (!in.is_open()) {
         return;
@@ -148,14 +150,14 @@ void Snapshot::load(std::function<void(std::string_view, std::string_view, Expir
         }
         uint8_t has_expiration = 0;
         in.read(reinterpret_cast<char*>(&has_expiration), sizeof(has_expiration));
-        if(!in.good()) {
+        if (!in.good()) {
             throw std::runtime_error("corrupted snapshot file");
         }
-        
+
         ExpirationTime expires_at = std::nullopt;
-        if(has_expiration != 0) {
+        if (has_expiration != 0) {
             expires_at = read_int64(in);
-            if(!in.good()) {
+            if (!in.good()) {
                 throw std::runtime_error("corrupted snapshot file");
             }
         }

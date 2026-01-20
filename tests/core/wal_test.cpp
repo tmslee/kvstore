@@ -30,7 +30,8 @@ TEST_F(WALTest, LogAndReplay) {
     std::vector<std::tuple<EntryType, std::string, std::string, ExpirationTime>> entries;
     {
         WriteAheadLog wal(wal_path_);
-        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value, ExpirationTime exp) {
+        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value,
+                              ExpirationTime exp) {
             entries.emplace_back(type, std::string(key), std::string(value), exp);
         });
     }
@@ -47,7 +48,7 @@ TEST_F(WALTest, LogAndReplay) {
     EXPECT_EQ(std::get<1>(entries[2]), "key1");
 }
 
-TEST_F(WALTest, LogAndReplayWithTTL){
+TEST_F(WALTest, LogAndReplayWithTTL) {
     {
         WriteAheadLog wal(wal_path_);
         wal.log_put("key1", "value1");
@@ -58,7 +59,8 @@ TEST_F(WALTest, LogAndReplayWithTTL){
 
     {
         WriteAheadLog wal(wal_path_);
-        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value, ExpirationTime exp) {
+        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value,
+                              ExpirationTime exp) {
             entries.emplace_back(type, std::string(key), std::string(value), exp);
         });
     }
@@ -87,7 +89,8 @@ TEST_F(WALTest, LogClear) {
 
     {
         WriteAheadLog wal(wal_path_);
-        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value, ExpirationTime exp) {
+        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value,
+                              ExpirationTime exp) {
             entries.emplace_back(type, std::string(key), std::string(value), exp);
         });
     }
@@ -109,7 +112,8 @@ TEST_F(WALTest, Truncate) {
 
     {
         WriteAheadLog wal(wal_path_);
-        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value, ExpirationTime exp) {
+        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value,
+                              ExpirationTime exp) {
             entries.emplace_back(type, std::string(key), std::string(value), exp);
         });
     }
@@ -122,7 +126,8 @@ TEST_F(WALTest, EmptyReplay) {
     WriteAheadLog wal(wal_path_);
 
     int count = 0;
-    wal.replay([&count](EntryType, std::string_view, std::string_view, ExpirationTime) { ++count; });
+    wal.replay(
+        [&count](EntryType, std::string_view, std::string_view, ExpirationTime) { ++count; });
 
     EXPECT_EQ(count, 0);
 }

@@ -50,7 +50,8 @@ TEST_F(SnapshotTest, SaveAndLoad) {
         Snapshot snap(snapshot_path_);
         std::unordered_map<std::string, std::string> loaded;
 
-        snap.load([&loaded](std::string_view key, std::string_view value, [[maybe_unused]]ExpirationTime exp) {
+        snap.load([&loaded](std::string_view key, std::string_view value,
+                            [[maybe_unused]] ExpirationTime exp) {
             loaded[std::string(key)] = std::string(value);
         });
 
