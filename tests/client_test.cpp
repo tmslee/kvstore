@@ -1,21 +1,22 @@
 #include "kvstore/client.hpp"
-#include "kvstore/kvstore.hpp"
-#include "kvstore/server.hpp"
 
 #include <gtest/gtest.h>
 
 #include <memory>
 
+#include "kvstore/kvstore.hpp"
+#include "kvstore/server.hpp"
+
 namespace kvstore::test {
 
 class ClientTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {
         store_ = std::make_unique<KVStore>();
         ServerOptions server_opts;
         server_opts.port = 16380;
         server_ = std::make_unique<Server>(*store_, server_opts);
-        server_-> start();
+        server_->start();
 
         ClientOptions client_opts;
         client_opts.port = 16380;
@@ -129,4 +130,4 @@ TEST_F(ClientTest, ConnectDisconnectReconnect) {
     EXPECT_EQ(*result, "value1");
 }
 
-} //namespace kvstore::test
+}  // namespace kvstore::test

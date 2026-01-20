@@ -15,7 +15,7 @@ struct ClientOptions {
 };
 
 class Client {
-public:
+   public:
     explicit Client(const ClientOptions& options = {});
     ~Client();
 
@@ -35,8 +35,8 @@ public:
             - testing
             - other services connecting to our store
 
-        another note: it might feel redundant to build our commands client side only for out server to parse it back. this is real and the cost of a text protocol.
-        text protocol:
+        another note: it might feel redundant to build our commands client side only for out server
+       to parse it back. this is real and the cost of a text protocol. text protocol:
             - human debuggable, easy to impelment, but inefficient: serialize, send, parse
         binary protocol:
             - no parsing overheads, structured from the start, cant debug with telnet
@@ -54,7 +54,7 @@ public:
     void clear();
     [[nodiscard]] bool ping();
 
-private:
+   private:
     std::string send_command(const std::string& command);
     std::string read_response();
 
@@ -62,6 +62,6 @@ private:
     int socket_fd_ = -1;
 };
 
-} //namespace kvstore
+}  // namespace kvstore
 
 #endif
