@@ -1,6 +1,8 @@
 #ifndef KVSTORE_CORE_STORE_HPP
 #define KVSTORE_CORE_STORE_HPP
 
+#include "kvstore/util/clock.hpp"
+
 #include <cstddef>
 #include <filesystem>
 #include <memory>
@@ -14,6 +16,7 @@ struct StoreOptions {
     std::optional<std::filesystem::path> persistence_path = std::nullopt;
     std::optional<std::filesystem::path> snapshot_path = std::nullopt;
     std::size_t snapshot_threshold = 10000;  // snapshot after N WAL entries
+    std::shared_ptr<util::Clock> clock = std::make_shared<util::SystemClock>();
 };
 
 class Store {
@@ -47,9 +50,10 @@ class Store {
        constructing a new std::string -> allocation = can throw.
     */
     void put(std::string_view key, std::string_view value);
+    void put(std::string_view key, std::string_view, util::Duration ttl);
+
     [[nodiscard]] std::optional<std::string> get(std::string_view key) const;
     [[nodiscard]] bool remove(std::string_view key);
-
     /*
         note: we use string_view for read-only access (function parameters)
         other use cases: parsing/tokenizing, passing string literals, function returns when lifetime
@@ -66,8 +70,8 @@ class Store {
     [[nodiscard]] bool empty() const noexcept;
 
     void clear() noexcept;
-
     void snapshot();
+    void cleanup_expired();
 
    private:
     class Impl;
