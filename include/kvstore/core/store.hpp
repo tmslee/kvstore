@@ -12,6 +12,8 @@ namespace kvstore::core {
 
 struct StoreOptions {
     std::optional<std::filesystem::path> persistence_path = std::nullopt;
+    std::optional<std::filesystem::path> snapshot_path = std::nullopt;
+    std::size_t snapshot_threshold = 10000;  // snapshot after N WAL entries
 };
 
 class Store {
@@ -62,7 +64,10 @@ class Store {
     [[nodiscard]] bool contains(std::string_view key) const;
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] bool empty() const noexcept;
+
     void clear() noexcept;
+
+    void snapshot();
 
    private:
     class Impl;
