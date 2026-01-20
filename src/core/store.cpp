@@ -11,13 +11,13 @@
 namespace kvstore::core {
 
 namespace {
-    int64_t to_epoch_ms(TimePoint tp) {
+    int64_t to_epoch_ms(util::TimePoint tp) {
         auto duration = tp.time_since_epoch();
         return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
     }
 
-    TimePoint from_epoch_ms(int64_t ms) {
-        return TimePoint(std::chrono::milliseconds(ms));
+    util::TimePoint from_epoch_ms(int64_t ms) {
+        return util::TimePoint(std::chrono::milliseconds(ms));
     }
 
     
@@ -38,7 +38,7 @@ class Store::Impl {
             snapshot_ = std::make_unique<Snapshot>(options_.snapshot_path.value());
             if (snapshot_->exists()) {
                 snapshot_->load([this](std::string_view key, std::string_view value, ExpirationTime expires_at_ms) {
-                    std::optional<TimePoint> expires_at = std::nullopt;
+                    std::optional<util::TimePoint> expires_at = std::nullopt;
                     if(expires_at_ms.has_value()) {
                         expires_at = from_epoch_ms(expires_at_ms.value());
                     }
@@ -163,12 +163,13 @@ class Store::Impl {
                 case EntryType::Put:
                     data_[std::string(key)] = Entry{std::string(value), std::nullopt};
                     break;
-                case EntryType::PutWithTTL:
+                case EntryType::PutWithTTL:{
                     auto expires_at = from_epoch_ms(expires_at_ms.value());
                     if(expires_at > clock_->now()) {
                         data_[std::string(key)] = Entry{std::string(value), expires_at};
                     }
                     break;
+                }
                 case EntryType::Remove:
                     data_.erase(std::string(key));
                     break;

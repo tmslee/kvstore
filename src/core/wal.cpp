@@ -20,7 +20,7 @@ void write_int64(std::ostream&out, int64_t value) {
 }
 
 int64_t read_int64(std::istream& in) {
-    int64 value = 0;
+    int64_t value = 0;
     in.read(reinterpret_cast<char*>(&value), sizeof(value));
     return value;
 }
@@ -142,7 +142,7 @@ void WriteAheadLog::replay(
     EntryType type{};
     std::string key;
     std::string value;
-    ExpirationTime expires_at
+    ExpirationTime expires_at;
     // try to read entry sequentially until end of file or failure
     while (read_entry(in, type, key, value, expires_at)) {
         callback(type, key, value, expires_at);

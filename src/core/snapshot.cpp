@@ -37,7 +37,7 @@ uint32_t read_uint32(std::istream& in) {
     return value;
 }
 
-void read_uint64(std::ostream&out, int64_t value) {
+void write_int64(std::ostream&out, int64_t value) {
     out.write(reinterpret_cast<const char*>(&value), sizeof(value));
 }
 
