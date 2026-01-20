@@ -4,12 +4,14 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 
 namespace kvstore::core {
 
-using EntryEmitter = std::function<void(std::string_view, std::string_view)>;
+using ExpirationTime = std::optional<int64_t>;
+using EntryEmitter = std::function<void(std::string_view, std::string_view, ExpirationTime)>;
 using EntryIterator = std::function<void(EntryEmitter)>;
 
 class Snapshot {
@@ -39,7 +41,7 @@ class Snapshot {
             - debugging - stack traces through lambdas are ugly
     */
     void save(const EntryIterator& iterate);
-    void load(std::function<void(std::string_view, std::string_view)> callback);
+    void load(std::function<void(std::string_view, std::string_view, ExpirationTime)> callback);
 
     [[nodiscard]] bool exists() const;
     [[nodiscard]] std::filesystem::path path() const;

@@ -37,6 +37,16 @@ uint32_t read_uint32(std::istream& in) {
     return value;
 }
 
+void read_uint64(std::ostream&out, int64_t value) {
+    out.write(reinterpret_cast<const char*>(&value), sizeof(value));
+}
+
+int64_t read_int64(std::istream& in) {
+    int64_t value = 0;
+    in.read(reinterpret_cast<char*>(&value), sizeof(value));
+    return value;
+}
+
 void write_string(std::ostream& out, std::string_view str) {
     write_uint32(out, static_cast<uint32_t>(str.size()));
     out.write(str.data(), static_cast<std::streamsize>(str.size()));
@@ -53,7 +63,7 @@ bool read_string(std::istream& in, std::string& str) {
 }
 
 constexpr uint32_t kMagic = 0x4B565353;  // "KVSS"
-constexpr uint32_t kVersion = 1;
+constexpr uint32_t kVersion = 2; // bumped for TTL support
 
 }  // namespace
 
@@ -75,15 +85,19 @@ void Snapshot::save(const EntryIterator& iterate) {
         // tellp (tell put) - return current write position
         // tellg (tell get) - return current read position
         auto count_pos = out.tellp();
-
         // write placeholder for count (we dont know yet)
         write_uint64(out, 0);
 
         std::size_t count = 0;
         // call iterator & pass the lambda which is the entry emitter
-        iterate([&out, &count](std::string_view key, std::string_view value) {
+        iterate([&out, &count](std::string_view key, std::string_view value, ExpirationTime expires_at) {
             write_string(out, key);
             write_string(out, value);
+            uint8_t has_expiration = expires_at.has_value() ? 1 : 0;
+            out.write(reinterpret_cast<const char*>(&has_expiration), sizeof(has_expiration));
+            if(expires_at.has_value()) {
+                write_int64(out, expires_at.value());
+            }
             ++count;
         });
 
@@ -105,7 +119,7 @@ void Snapshot::save(const EntryIterator& iterate) {
     std::filesystem::rename(temp_path, path_);
 }
 
-void Snapshot::load(std::function<void(std::string_view, std::string_view)> callback) {
+void Snapshot::load(std::function<void(std::string_view, std::string_view, ExpirationTime)> callback) {
     std::ifstream in(path_, std::ios::binary);
     if (!in.is_open()) {
         return;
@@ -132,7 +146,20 @@ void Snapshot::load(std::function<void(std::string_view, std::string_view)> call
         if (!read_string(in, key) || !read_string(in, value)) {
             throw std::runtime_error("corrupted snapshot file");
         }
-        callback(key, value);
+        uint8_t has_expiration = 0;
+        in.read(reinterpret_cast<char*>(&has_expiration), sizeof(has_expiration));
+        if(!in.good()) {
+            throw std::runtime_error("corrupted snapshot file");
+        }
+        
+        ExpirationTime expires_at = std::nullopt;
+        if(has_expiration != 0) {
+            expires_at = read_int64(in);
+            if(!in.good()) {
+                throw std::runtime_error("corrupted snapshot file");
+            }
+        }
+        callback(key, value, expires_at);
     }
 
     entry_count_ = count;
