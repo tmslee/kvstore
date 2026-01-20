@@ -27,11 +27,12 @@ TEST_F(WALTest, LogAndReplay) {
         wal.log_put("key2", "value2");
         wal.log_remove("key1");
     }
-    std::vector<std::tuple<EntryType, std::string, std::string>> entries;
+    std::vector<std::tuple<EntryType, std::string, std::string, ExpirationTime>> entries;
     {
         WriteAheadLog wal(wal_path_);
-        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value) {
-            entries.emplace_back(type, std::string(key), std::string(value));
+        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value,
+                              ExpirationTime exp) {
+            entries.emplace_back(type, std::string(key), std::string(value), exp);
         });
     }
     ASSERT_EQ(entries.size(), 3);
@@ -47,6 +48,35 @@ TEST_F(WALTest, LogAndReplay) {
     EXPECT_EQ(std::get<1>(entries[2]), "key1");
 }
 
+TEST_F(WALTest, LogAndReplayWithTTL) {
+    {
+        WriteAheadLog wal(wal_path_);
+        wal.log_put("key1", "value1");
+        wal.log_put_with_ttl("key2", "value2", 123456789);
+    }
+
+    std::vector<std::tuple<EntryType, std::string, std::string, ExpirationTime>> entries;
+
+    {
+        WriteAheadLog wal(wal_path_);
+        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value,
+                              ExpirationTime exp) {
+            entries.emplace_back(type, std::string(key), std::string(value), exp);
+        });
+    }
+
+    ASSERT_EQ(entries.size(), 2);
+
+    EXPECT_EQ(std::get<0>(entries[0]), EntryType::Put);
+    EXPECT_FALSE(std::get<3>(entries[0]).has_value());
+
+    EXPECT_EQ(std::get<0>(entries[1]), EntryType::PutWithTTL);
+    EXPECT_EQ(std::get<1>(entries[1]), "key2");
+    EXPECT_EQ(std::get<2>(entries[1]), "value2");
+    ASSERT_TRUE(std::get<3>(entries[1]).has_value());
+    EXPECT_EQ(std::get<3>(entries[1]).value(), 123456789);
+}
+
 TEST_F(WALTest, LogClear) {
     {
         WriteAheadLog wal(wal_path_);
@@ -55,12 +85,13 @@ TEST_F(WALTest, LogClear) {
         wal.log_put("key2", "value2");
     }
 
-    std::vector<std::tuple<EntryType, std::string, std::string>> entries;
+    std::vector<std::tuple<EntryType, std::string, std::string, ExpirationTime>> entries;
 
     {
         WriteAheadLog wal(wal_path_);
-        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value) {
-            entries.emplace_back(type, std::string(key), std::string(value));
+        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value,
+                              ExpirationTime exp) {
+            entries.emplace_back(type, std::string(key), std::string(value), exp);
         });
     }
 
@@ -77,12 +108,13 @@ TEST_F(WALTest, Truncate) {
         wal.log_put("key3", "value3");
     }
 
-    std::vector<std::tuple<EntryType, std::string, std::string>> entries;
+    std::vector<std::tuple<EntryType, std::string, std::string, ExpirationTime>> entries;
 
     {
         WriteAheadLog wal(wal_path_);
-        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value) {
-            entries.emplace_back(type, std::string(key), std::string(value));
+        wal.replay([&entries](EntryType type, std::string_view key, std::string_view value,
+                              ExpirationTime exp) {
+            entries.emplace_back(type, std::string(key), std::string(value), exp);
         });
     }
 
@@ -94,7 +126,8 @@ TEST_F(WALTest, EmptyReplay) {
     WriteAheadLog wal(wal_path_);
 
     int count = 0;
-    wal.replay([&count](EntryType, std::string_view, std::string_view) { ++count; });
+    wal.replay(
+        [&count](EntryType, std::string_view, std::string_view, ExpirationTime) { ++count; });
 
     EXPECT_EQ(count, 0);
 }

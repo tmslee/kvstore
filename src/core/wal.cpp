@@ -15,6 +15,16 @@ uint32_t read_uint32(std::istream& in) {
     return value;
 }
 
+void write_int64(std::ostream& out, int64_t value) {
+    out.write(reinterpret_cast<const char*>(&value), sizeof(value));
+}
+
+int64_t read_int64(std::istream& in) {
+    int64_t value = 0;
+    in.read(reinterpret_cast<char*>(&value), sizeof(value));
+    return value;
+}
+
 void write_string(std::ostream& out, std::string_view str) {
     write_uint32(out, static_cast<uint32_t>(str.size()));
     // need to cast str.size() (std::size_t is signed) to std::streamsize (unsigned)to avoid
@@ -66,6 +76,11 @@ void WriteAheadLog::log_put(std::string_view key, std::string_view value) {
     write_entry(EntryType::Put, key, value);
 }
 
+void WriteAheadLog::log_put_with_ttl(std::string_view key, std::string_view value,
+                                     int64_t expires_at_ms) {
+    std::lock_guard lock(mutex_);
+    write_entry_with_ttl(EntryType::PutWithTTL, key, value, expires_at_ms);
+}
 void WriteAheadLog::log_remove(std::string_view key) {
     std::lock_guard lock(mutex_);
     write_entry(EntryType::Remove, key, "");
@@ -83,8 +98,17 @@ void WriteAheadLog::write_entry(EntryType type, std::string_view key, std::strin
     out_.flush();
 }
 
+void WriteAheadLog::write_entry_with_ttl(EntryType type, std::string_view key,
+                                         std::string_view value, int64_t expires_at_ms) {
+    out_.write(reinterpret_cast<const char*>(&type), sizeof(type));
+    write_string(out_, key);
+    write_string(out_, value);
+    write_int64(out_, expires_at_ms);
+    out_.flush();
+}
+
 bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& key,
-                               std::string& value) {
+                               std::string& value, ExpirationTime& expires_at) {
     // we return bool instead of throwing because end of file is expected, not exceptional
     // not being able to read successfully is an expected pattern eventually
     in.read(reinterpret_cast<char*>(&type), sizeof(type));
@@ -97,22 +121,33 @@ bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& 
     if (!read_string(in, value)) {
         return false;
     }
+    if (type == EntryType::PutWithTTL) {
+        expires_at = read_int64(in);
+        if (!in.good()) {
+            return false;
+        }
+    } else {
+        expires_at = std::nullopt;
+    }
     return true;
 }
 
 void WriteAheadLog::replay(
-    std::function<void(EntryType, std::string_view, std::string_view)> callback) {
+    std::function<void(EntryType, std::string_view, std::string_view, ExpirationTime)> callback) {
     std::lock_guard lock(mutex_);
+
     std::ifstream in(path_, std::ios::binary);
     if (!in.is_open()) {
         return;
     }
+
     EntryType type{};
     std::string key;
     std::string value;
+    ExpirationTime expires_at;
     // try to read entry sequentially until end of file or failure
-    while (read_entry(in, type, key, value)) {
-        callback(type, key, value);
+    while (read_entry(in, type, key, value, expires_at)) {
+        callback(type, key, value, expires_at);
     }
 }
 
