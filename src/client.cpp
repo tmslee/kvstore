@@ -86,7 +86,9 @@ std::string Client::send_command(const std::string& command) {
     std::string msg = command + "\n";
     size_t total_sent = 0;
 
+    // we lop here until all bytes are sent
     while(total_sent < msg.size()) {
+        // ssize_t : signed size type
         ssize_t sent = send(socket_fd_, msg.c_str() + total_sent, msg.size() - total_sent, 0);
         if(sent <= 0) {
             disconnect();
@@ -115,8 +117,12 @@ std::string Client::read_response() {
     return response;
 }
 
+/*
+    note: we throw in user operations because errors are rare and unrecoverable (network down = cant continue anyway)
+*/
+
 void Client::put(std::string_view key, std::string_view value) {
-    std::string cmd = "PUT" + std::string(key) + " " + std::string(value);
+    std::string cmd = "PUT " + std::string(key) + " " + std::string(value);
     std::string response = send_command(cmd);
     
     if(response.substr(0, 2) != "OK") {
@@ -125,7 +131,7 @@ void Client::put(std::string_view key, std::string_view value) {
 }
 
 std::optional<std::string> Client::get(std::string_view key) {
-    std::string cmd = "GET" + std::string(key);
+    std::string cmd = "GET " + std::string(key);
     std::string response = send_command(cmd);
 
     if(response == "NOT_FOUND") {
@@ -170,7 +176,7 @@ std::size_t Client::size() {
     std::string response = send_command("SIZE");
     
     if(response.substr(0, 3) == "OK ") {
-        return std::stoull(response.subtr(3));
+        return std::stoull(response.substr(3));
     }
 
     throw std::runtime_error("SIZE failed: " + response);
