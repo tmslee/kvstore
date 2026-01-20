@@ -32,7 +32,7 @@ public:
         current_ = time;
     }
 
-    void advacne(Duration duration) {
+    void advance(Duration duration) {
         current_ += duration;
     }
 private:

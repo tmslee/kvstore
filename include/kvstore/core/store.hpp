@@ -52,7 +52,7 @@ class Store {
     void put(std::string_view key, std::string_view value);
     void put(std::string_view key, std::string_view, util::Duration ttl);
 
-    [[nodiscard]] std::optional<std::string> get(std::string_view key) const;
+    [[nodiscard]] std::optional<std::string> get(std::string_view key);
     [[nodiscard]] bool remove(std::string_view key);
     /*
         note: we use string_view for read-only access (function parameters)
@@ -65,7 +65,7 @@ class Store {
             - need null-termination - string_view is NOT null-terminated
     */
 
-    [[nodiscard]] bool contains(std::string_view key) const;
+    [[nodiscard]] bool contains(std::string_view key);
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] bool empty() const noexcept;
 

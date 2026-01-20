@@ -52,6 +52,15 @@ target_link_libraries(snapshot_test
         GTest::gtest_main
 )
 
+add_executable(ttl_test
+    core/ttl_test.cpp
+)
+target_link_libraries(ttl_test
+    PRIVATE
+        kvstore
+        GTest::gtest_main
+)
+
 if(ENABLE_ASAN OR ENABLE_TSAN OR ENABLE_UBSAN)
     # Sanitizer builds: skip discovery, just run the executable
     add_test(NAME store_test COMMAND store_test)
@@ -60,7 +69,7 @@ if(ENABLE_ASAN OR ENABLE_TSAN OR ENABLE_UBSAN)
     add_test(NAME protocol_test COMMAND protocol_test)
     add_test(NAME client_test COMMAND client_test)
     add_test(NAME snapshot_test COMMAND snapshot_test)
-
+    add_test(NAME ttl_test COMMAND ttl_test)
 else()
     # Normal builds: use discovery for better CTest integration
     include(GoogleTest)
@@ -70,5 +79,5 @@ else()
     gtest_discover_tests(protocol_test)
     gtest_discover_tests(client_test)
     gtest_discover_tests(snapshot_test)
-
+    gtest_discover_tests(ttl_test)
 endif()

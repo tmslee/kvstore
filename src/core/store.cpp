@@ -12,7 +12,7 @@ namespace kvstore::core {
 
 struct Entry {
     std::string value;
-    std::optional<TimePoint> expires_at = std::nullopt;
+    std::optional<util::TimePoint> expires_at = std::nullopt;
 };
 
 class Store::Impl {
@@ -25,7 +25,7 @@ class Store::Impl {
             snapshot_ = std::make_unique<Snapshot>(options_.snapshot_path.value());
             if (snapshot_->exists()) {
                 snapshot_->load([this](std::string_view key, std::string_view value) {
-                    data_.insert_or_assign(std::string(key), std::string(value));
+                    data_[std::string(key)] = Entry{std::string(value), std::nullopt};
                 });
             }
         }
@@ -57,7 +57,7 @@ class Store::Impl {
         data_[std::string(key)] = Entry{std::string(value), expires_at};
     }
 
-    [[nodiscard]] std::optional<std::string> get(std::string_view key) const {
+    [[nodiscard]] std::optional<std::string> get(std::string_view key) {
         std::unique_lock lock(mutex_);
         auto it = data_.find(std::string(key));
         if(it == data_.end()) {
@@ -67,7 +67,7 @@ class Store::Impl {
             data_.erase(it);
             return std::nullopt;
         }
-        return it->sescond.value;
+        return it->second.value;
     }
 
     [[nodiscard]] bool remove(std::string_view key) {
@@ -80,7 +80,7 @@ class Store::Impl {
         return data_.erase(std::string(key)) > 0;
     }
 
-    [[nodiscard]] bool contains(std::string_view key) const {
+    [[nodiscard]] bool contains(std::string_view key) {
         std::unique_lock lock(mutex_);
         auto it = data_.find(std::string(key));
         if(it == data_.end()) {
@@ -142,7 +142,7 @@ class Store::Impl {
         wal_->replay([this](EntryType type, std::string_view key, std::string_view value) {
             switch (type) {
                 case EntryType::Put:
-                    data_.insert_or_assign(std::string(key), std::string(value));
+                    data_[std::string(key)] = Entry{std::string(value), std::nullopt};
                     break;
                 case EntryType::Remove:
                     data_.erase(std::string(key));
@@ -166,8 +166,8 @@ class Store::Impl {
         }
 
         snapshot_->save([this](EntryEmitter emit) {
-            for (const auto& [key, value] : data_) {
-                emit(key, value);
+            for (const auto& [key, entry] : data_) {
+                emit(key, entry.value);
             }
         });
 
@@ -181,7 +181,7 @@ class Store::Impl {
     StoreOptions options_;
     std::shared_ptr<util::Clock> clock_;
     mutable std::shared_mutex mutex_;
-    std::unordered_map<std::string, std::string> data_;
+    std::unordered_map<std::string, Entry> data_;
     std::unique_ptr<WriteAheadLog> wal_;
     std::unique_ptr<Snapshot> snapshot_;
     std::size_t wal_entries_since_snapshot_ = 0;
@@ -204,7 +204,7 @@ void Store::put(std::string_view key, std::string_view value) {
 void Store::put(std::string_view key, std::string_view value, util::Duration ttl) {
     impl_->put(key, value, ttl);
 }
-std::optional<std::string> Store::get(std::string_view key) const {
+std::optional<std::string> Store::get(std::string_view key) {
     return impl_->get(key);
 }
 
@@ -212,7 +212,7 @@ bool Store::remove(std::string_view key) {
     return impl_->remove(key);
 }
 
-bool Store::contains(std::string_view key) const {
+bool Store::contains(std::string_view key) {
     return impl_->contains(key);
 }
 
