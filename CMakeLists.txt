@@ -46,6 +46,7 @@ target_sources(kvstore
         src/net/server.cpp
         src/net/protocol.cpp
         src/net/client.cpp
+        src/core/snapshot.cpp
 )
 
 target_include_directories(kvstore
