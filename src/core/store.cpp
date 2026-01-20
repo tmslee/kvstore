@@ -10,6 +10,19 @@
 
 namespace kvstore::core {
 
+namespace {
+    int64_t to_epoch_ms(TimePoint tp) {
+        auto duration = tp.time_since_epoch();
+        return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+    }
+
+    TimePoint from_epoch_ms(int64_t ms) {
+        return TimePoint(std::chrono::milliseconds(ms));
+    }
+
+    
+} //namespace
+
 struct Entry {
     std::string value;
     std::optional<util::TimePoint> expires_at = std::nullopt;
@@ -24,8 +37,14 @@ class Store::Impl {
         if (options_.snapshot_path.has_value()) {
             snapshot_ = std::make_unique<Snapshot>(options_.snapshot_path.value());
             if (snapshot_->exists()) {
-                snapshot_->load([this](std::string_view key, std::string_view value) {
-                    data_[std::string(key)] = Entry{std::string(value), std::nullopt};
+                snapshot_->load([this](std::string_view key, std::string_view value, ExpirationTime expires_at_ms) {
+                    std::optional<TimePoint> expires_at = std::nullopt;
+                    if(expires_at_ms.has_value()) {
+                        expires_at = from_epoch_ms(expires_at_ms.value());
+                    }
+                    if(!expires_at.has_value() || expires_at.value() > clock_->now()) {
+                        data_[std::string(key)] = Entry{std::string(value), expires_at};
+                    }
                 });
             }
         }
@@ -50,7 +69,7 @@ class Store::Impl {
         std::unique_lock lock(mutex_);
         auto expires_at = clock_->now() + ttl;
         if (wal_) {
-            wal_->log_put(key, value);
+            wal_->log_put_with_ttl(key, value, to_epoch_ms(expires_at));
             ++wal_entries_since_snapshot_;
             maybe_snapshot();
         }
@@ -139,10 +158,16 @@ class Store::Impl {
     }
 
     void recover() {
-        wal_->replay([this](EntryType type, std::string_view key, std::string_view value) {
+        wal_->replay([this](EntryType type, std::string_view key, std::string_view value, ExpirationTime expires_at_ms) {
             switch (type) {
                 case EntryType::Put:
                     data_[std::string(key)] = Entry{std::string(value), std::nullopt};
+                    break;
+                case EntryType::PutWithTTL:
+                    auto expires_at = from_epoch_ms(expires_at_ms.value());
+                    if(expires_at > clock_->now()) {
+                        data_[std::string(key)] = Entry{std::string(value), expires_at};
+                    }
                     break;
                 case EntryType::Remove:
                     data_.erase(std::string(key));
@@ -167,7 +192,13 @@ class Store::Impl {
 
         snapshot_->save([this](EntryEmitter emit) {
             for (const auto& [key, entry] : data_) {
-                emit(key, entry.value);
+                if(!is_expired(entry)) {
+                    ExpirationTime expires_at_ms = std::nullopt;
+                    if(entry.expires_at.has_value()) {
+                        expires_at_ms = to_epoch_ms(entry.expires_at.value());
+                    }
+                    emit(key, entry.value, expires_at_ms);
+                }
             }
         });
 

@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <unordered_map
 
 #include "kvstore/core/store.hpp"
 
@@ -37,7 +38,7 @@ TEST_F(SnapshotTest, SaveAndLoad) {
 
         snap.save([&data](core::EntryEmitter emit) {
             for (const auto& [k, v] : data) {
-                emit(k, v);
+                emit(k, v, std::nullopt);
             }
         });
 
@@ -60,12 +61,53 @@ TEST_F(SnapshotTest, SaveAndLoad) {
     }
 }
 
+TEST_F(SnapshotTest, SaveAndLoadWithTTL) {
+    {
+        Snapshot snap(snapshot_path_);
+
+        snap.save([](EntryEmitter emit) {
+            emit("key1", "value1", std::nullopt);
+            emit("key2", "value2", 123456789);
+            emit("key3", "value3", 987654321);
+        });
+    }
+
+    {
+        Snapshot snap(snapshot_path_);
+        std::vector<std::tuple<std::string, std::string, ExpirationTime>> loaded;
+
+        snap.load([&loaded](std::string_view key, std::string_view value, ExpirationTime exp) {
+            loaded.emplace_back(std::string(key), std::string(value), exp);
+        });
+
+        ASSERT_EQ(loaded.size(), 3);
+
+        // Order may vary, so find each entry
+        bool found_key1 = false, found_key2 = false, found_key3 = false;
+        for (const auto& [k, v, exp] : loaded) {
+            if (k == "key1") {
+                EXPECT_FALSE(exp.has_value());
+                found_key1 = true;
+            } else if (k == "key2") {
+                ASSERT_TRUE(exp.has_value());
+                EXPECT_EQ(exp.value(), 123456789);
+                found_key2 = true;
+            } else if (k == "key3") {
+                ASSERT_TRUE(exp.has_value());
+                EXPECT_EQ(exp.value(), 987654321);
+                found_key3 = true;
+            }
+        }
+        EXPECT_TRUE(found_key1 && found_key2 && found_key3);
+    }
+}
+
 TEST_F(SnapshotTest, LoadNonexistent) {
     Snapshot snap(snapshot_path_);
     EXPECT_FALSE(snap.exists());
 
     int count = 0;
-    snap.load([&count](std::string_view, std::string_view) { ++count; });
+    snap.load([&count](std::string_view, std::string_view, ExpirationTime) { ++count; });
     EXPECT_EQ(count, 0);
 }
 

@@ -114,4 +114,70 @@ TEST_F(TTLTest, MultipleTTLs) {
     EXPECT_FALSE(store_->contains("key3"));
 }
 
+TEST_F(TTLTest, TTLPersistsAcrossRestart) {
+    auto test_dir = std::filesystem::temp_directory_path() / "ttl_persist_test";
+    std::filesystem::create_directories(test_dir);
+    auto wal_path = test_dir / "test.wal";
+
+    {
+        auto persist_clock = std::make_shared<MockClock>();
+        StoreOptions opts;
+        opts.persistence_path = wal_path;
+        opts.clock = persist_clock;
+        Store store(opts);
+
+        store.put("key1", "value1", Duration(10000));
+        store.put("key2", "value2");
+
+        persist_clock->advance(Duration(5000));
+    }
+
+    {
+        auto persist_clock = std::make_shared<MockClock>();
+        StoreOptions opts;
+        opts.persistence_path = wal_path;
+        opts.clock = persist_clock;
+        Store store(opts);
+
+        EXPECT_TRUE(store.contains("key1"));
+        EXPECT_TRUE(store.contains("key2"));
+
+        persist_clock->advance(Duration(6000));
+
+        EXPECT_FALSE(store.contains("key1"));
+        EXPECT_TRUE(store.contains("key2"));
+    }
+
+    std::filesystem::remove_all(test_dir);
+}
+
+TEST_F(TTLTest, ExpiredKeyNotLoadedOnRecovery) {
+    auto test_dir = std::filesystem::temp_directory_path() / "ttl_expired_test";
+    std::filesystem::create_directories(test_dir);
+    auto wal_path = test_dir / "test.wal";
+
+    {
+        auto persist_clock = std::make_shared<MockClock>();
+        StoreOptions opts;
+        opts.persistence_path = wal_path;
+        opts.clock = persist_clock;
+        Store store(opts);
+
+        store.put("key1", "value1", Duration(1000));
+    }
+
+    {
+        auto persist_clock = std::make_shared<MockClock>();
+        persist_clock->advance(Duration(2000));
+        StoreOptions opts;
+        opts.persistence_path = wal_path;
+        opts.clock = persist_clock;
+        Store store(opts);
+
+        EXPECT_FALSE(store.contains("key1"));
+    }
+
+    std::filesystem::remove_all(test_dir);
+}
+
 }  // namespace kvstore::core::test
