@@ -1,12 +1,12 @@
-#include "kvstore/util/clock.hpp"
-#include "kvstore/core/store.hpp"
-
 #include <gtest/gtest.h>
+
+#include "kvstore/core/store.hpp"
+#include "kvstore/util/clock.hpp"
 
 namespace kvstore::core::test {
 
-class TTLTest : public ::testing::Test{
-protected:
+class TTLTest : public ::testing::Test {
+   protected:
     void SetUp() override {
         clock_ = std::make_shared<util::MockClock>();
         StoreOptions opts;
@@ -17,7 +17,7 @@ protected:
     std::unique_ptr<Store> store_;
 };
 
-TEST_F(TTLTest, KeyExpiresAfterTTL){
+TEST_F(TTLTest, KeyExpiresAfterTTL) {
     store_->put("key1", "value1", util::Duration(1000));
 
     auto result = store_->get("key1");
@@ -34,7 +34,7 @@ TEST_F(TTLTest, KeyExpiresAfterTTL){
     EXPECT_FALSE(result.has_value());
 }
 
-TEST_F(TTLTest, ContainsReturnsFalseForExpired){
+TEST_F(TTLTest, ContainsReturnsFalseForExpired) {
     store_->put("key1", "value1", util::Duration(1000));
 
     EXPECT_TRUE(store_->contains("key1"));
@@ -44,7 +44,7 @@ TEST_F(TTLTest, ContainsReturnsFalseForExpired){
     EXPECT_FALSE(store_->contains("key1"));
 }
 
-TEST_F(TTLTest, KeyWithoutTTLNeverExpires){
+TEST_F(TTLTest, KeyWithoutTTLNeverExpires) {
     store_->put("key1", "value1");
 
     clock_->advance(util::Duration(1000000));
@@ -54,7 +54,7 @@ TEST_F(TTLTest, KeyWithoutTTLNeverExpires){
     EXPECT_EQ(*result, "value1");
 }
 
-TEST_F(TTLTest, PutOverwritesTTL){
+TEST_F(TTLTest, PutOverwritesTTL) {
     store_->put("key1", "value1", util::Duration(1000));
 
     clock_->advance(util::Duration(500));
@@ -68,7 +68,7 @@ TEST_F(TTLTest, PutOverwritesTTL){
     EXPECT_EQ(*result, "value2");
 }
 
-TEST_F(TTLTest, PutWithoutTTLRemovesTTL){
+TEST_F(TTLTest, PutWithoutTTLRemovesTTL) {
     store_->put("key1", "value1", util::Duration(1000));
 
     clock_->advance(util::Duration(500));
@@ -82,7 +82,7 @@ TEST_F(TTLTest, PutWithoutTTLRemovesTTL){
     EXPECT_EQ(*result, "value2");
 }
 
-TEST_F(TTLTest, CleanupExpiredRemovesExpiredKeys){
+TEST_F(TTLTest, CleanupExpiredRemovesExpiredKeys) {
     store_->put("key1", "value1", util::Duration(1000));
     store_->put("key2", "value2", util::Duration(2000));
     store_->put("key3", "value3");
@@ -96,7 +96,7 @@ TEST_F(TTLTest, CleanupExpiredRemovesExpiredKeys){
     EXPECT_TRUE(store_->contains("key3"));
 }
 
-TEST_F(TTLTest, MultipleTTLs){
+TEST_F(TTLTest, MultipleTTLs) {
     store_->put("key1", "value1", util::Duration(100));
     store_->put("key2", "value2", util::Duration(200));
     store_->put("key3", "value3", util::Duration(300));
@@ -114,4 +114,4 @@ TEST_F(TTLTest, MultipleTTLs){
     EXPECT_FALSE(store_->contains("key3"));
 }
 
-} //namespace kvstore::core::test
+}  // namespace kvstore::core::test

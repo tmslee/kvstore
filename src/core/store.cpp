@@ -1,12 +1,12 @@
 #include "kvstore/core/store.hpp"
-#include "kvstore/core/snapshot.hpp"
-#include "kvstore/core/wal.hpp"
 
-#include <optional>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <unordered_map>
 
+#include "kvstore/core/snapshot.hpp"
+#include "kvstore/core/wal.hpp"
 
 namespace kvstore::core {
 
@@ -17,7 +17,7 @@ struct Entry {
 
 class Store::Impl {
    public:
-    Impl() : clock_(std::make_shared<util::SystemClock>()){}
+    Impl() : clock_(std::make_shared<util::SystemClock>()) {}
 
     explicit Impl(const StoreOptions& options) : options_(options), clock_(options.clock) {
         // IMPORTANT: load snapshot first THEN WAL
@@ -60,10 +60,10 @@ class Store::Impl {
     [[nodiscard]] std::optional<std::string> get(std::string_view key) {
         std::unique_lock lock(mutex_);
         auto it = data_.find(std::string(key));
-        if(it == data_.end()) {
+        if (it == data_.end()) {
             return std::nullopt;
         }
-        if(is_expired(it->second)) {
+        if (is_expired(it->second)) {
             data_.erase(it);
             return std::nullopt;
         }
@@ -83,10 +83,10 @@ class Store::Impl {
     [[nodiscard]] bool contains(std::string_view key) {
         std::unique_lock lock(mutex_);
         auto it = data_.find(std::string(key));
-        if(it == data_.end()) {
+        if (it == data_.end()) {
             return false;
         }
-        if(is_expired(it->second)) {
+        if (is_expired(it->second)) {
             data_.erase(it);
             return false;
         }
@@ -120,9 +120,9 @@ class Store::Impl {
 
     void cleanup_expired() {
         std::unique_lock lock(mutex_);
-        auto now = clock_ -> now();
-        for(auto it = data_.begin(); it != data_.end();) {
-            if(it->second.expires_at.has_value() && it->second.expires_at.value() <= now) {
+        auto now = clock_->now();
+        for (auto it = data_.begin(); it != data_.end();) {
+            if (it->second.expires_at.has_value() && it->second.expires_at.value() <= now) {
                 it = data_.erase(it);
             } else {
                 ++it;
@@ -132,12 +132,12 @@ class Store::Impl {
 
    private:
     [[nodiscard]] bool is_expired(const Entry& entry) const {
-        if(!entry.expires_at.has_value()) {
+        if (!entry.expires_at.has_value()) {
             return false;
         }
         return clock_->now() >= entry.expires_at.value();
     }
-    
+
     void recover() {
         wal_->replay([this](EntryType type, std::string_view key, std::string_view value) {
             switch (type) {

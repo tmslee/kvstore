@@ -10,24 +10,24 @@ using TimePoint = std::chrono::steady_clock::time_point;
 using Duration = std::chrono::milliseconds;
 
 class Clock {
-public:
+   public:
     virtual ~Clock() = default;
     [[nodiscard]] virtual TimePoint now() const = 0;
 };
 
 class SystemClock : public Clock {
-public:
+   public:
     [[nodiscard]] TimePoint now() const override {
         return std::chrono::steady_clock::now();
     }
 };
 
 class MockClock : public Clock {
-public:
+   public:
     [[nodiscard]] TimePoint now() const override {
         return current_;
     }
-    
+
     void set(TimePoint time) {
         current_ = time;
     }
@@ -35,10 +35,11 @@ public:
     void advance(Duration duration) {
         current_ += duration;
     }
-private:
+
+   private:
     TimePoint current_ = std::chrono::steady_clock::now();
 };
 
-}//namespace kvstore::util
+}  // namespace kvstore::util
 
 #endif

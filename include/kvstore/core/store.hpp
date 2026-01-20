@@ -1,14 +1,14 @@
 #ifndef KVSTORE_CORE_STORE_HPP
 #define KVSTORE_CORE_STORE_HPP
 
-#include "kvstore/util/clock.hpp"
-
 #include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+
+#include "kvstore/util/clock.hpp"
 
 namespace kvstore::core {
 
