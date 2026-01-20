@@ -119,30 +119,29 @@ TEST_F(TTLTest, TTLPersistsAcrossRestart) {
     std::filesystem::create_directories(test_dir);
     auto wal_path = test_dir / "test.wal";
 
+    auto shared_clock = std::make_shared<util::MockClock>();
     {
-        auto persist_clock = std::make_shared<util::MockClock>();
         StoreOptions opts;
         opts.persistence_path = wal_path;
-        opts.clock = persist_clock;
+        opts.clock = shared_clock;
         Store store(opts);
 
         store.put("key1", "value1", util::Duration(10000));
         store.put("key2", "value2");
-
-        persist_clock->advance(util::Duration(5000));
     }
 
+    shared_clock->advance(util::Duration(5000));
+
     {
-        auto persist_clock = std::make_shared<util::MockClock>();
         StoreOptions opts;
         opts.persistence_path = wal_path;
-        opts.clock = persist_clock;
+        opts.clock = shared_clock;
         Store store(opts);
 
         EXPECT_TRUE(store.contains("key1"));
         EXPECT_TRUE(store.contains("key2"));
 
-        persist_clock->advance(util::Duration(6000));
+        shared_clock->advance(util::Duration(6000));
 
         EXPECT_FALSE(store.contains("key1"));
         EXPECT_TRUE(store.contains("key2"));
@@ -156,22 +155,22 @@ TEST_F(TTLTest, ExpiredKeyNotLoadedOnRecovery) {
     std::filesystem::create_directories(test_dir);
     auto wal_path = test_dir / "test.wal";
 
+    auto shared_clock = std::make_shared<util::MockClock>();
+
     {
-        auto persist_clock = std::make_shared<util::MockClock>();
         StoreOptions opts;
         opts.persistence_path = wal_path;
-        opts.clock = persist_clock;
+        opts.clock = shared_clock;
         Store store(opts);
 
         store.put("key1", "value1", util::Duration(1000));
     }
 
     {
-        auto persist_clock = std::make_shared<util::MockClock>();
-        persist_clock->advance(util::Duration(2000));
+        shared_clock->advance(util::Duration(2000));
         StoreOptions opts;
         opts.persistence_path = wal_path;
-        opts.clock = persist_clock;
+        opts.clock = shared_clock;
         Store store(opts);
 
         EXPECT_FALSE(store.contains("key1"));
