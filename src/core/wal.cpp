@@ -1,8 +1,8 @@
-#include "kvstore/wal.hpp"
+#include "kvstore/core/wal.hpp"
 
 #include <stdexcept>
 
-namespace kvstore {
+namespace kvstore::core {
 
 namespace {
 void write_uint32(std::ostream& out, uint32_t value) {
@@ -141,4 +141,4 @@ std::size_t WriteAheadLog::size() const {
     return std::filesystem::file_size(path_);
 }
 
-}  // namespace kvstore
+}  // namespace kvstore::core

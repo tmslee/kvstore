@@ -1,4 +1,4 @@
-#include "kvstore/kvstore.hpp"
+#include "kvstore/core/store.hpp"
 
 #include <gtest/gtest.h>
 
@@ -7,31 +7,31 @@
 #include <thread>
 #include <vector>
 
-namespace kvstore::test {
+namespace kvstore::core::test {
 
-class KVStoreTest : public ::testing::Test {
+class StoreTest : public ::testing::Test {
    protected:
-    KVStore store;
+    Store store;
 };
 
-TEST_F(KVStoreTest, InitiallyEmpty) {
+TEST_F(StoreTest, InitiallyEmpty) {
     EXPECT_TRUE(store.empty());
     EXPECT_EQ(store.size(), 0);
 }
 
-TEST_F(KVStoreTest, PutAndGet) {
+TEST_F(StoreTest, PutAndGet) {
     store.put("key1", "value1");
     auto result = store.get("key1");
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(*result, "value1");
 }
 
-TEST_F(KVStoreTest, GetMissingKey) {
+TEST_F(StoreTest, GetMissingKey) {
     auto result = store.get("nonexistent");
     EXPECT_FALSE(result.has_value());
 }
 
-TEST_F(KVStoreTest, PutOverwrites) {
+TEST_F(StoreTest, PutOverwrites) {
     store.put("key1", "value1");
     store.put("key1", "value2");
     auto result = store.get("key1");
@@ -39,20 +39,20 @@ TEST_F(KVStoreTest, PutOverwrites) {
     EXPECT_EQ(*result, "value2");
 }
 
-TEST_F(KVStoreTest, Contains) {
+TEST_F(StoreTest, Contains) {
     EXPECT_FALSE(store.contains("key1"));
     store.put("key1", "value1");
     EXPECT_TRUE(store.contains("key1"));
 }
 
-TEST_F(KVStoreTest, Remove) {
+TEST_F(StoreTest, Remove) {
     store.put("key1", "value1");
     EXPECT_TRUE(store.remove("key1"));
     EXPECT_FALSE(store.contains("key1"));
     EXPECT_FALSE(store.remove("key1"));
 }
 
-TEST_F(KVStoreTest, Clear) {
+TEST_F(StoreTest, Clear) {
     store.put("key1", "value1");
     store.put("key2", "value2");
     store.put("key3", "value3");
@@ -62,7 +62,7 @@ TEST_F(KVStoreTest, Clear) {
     EXPECT_FALSE(store.contains("key1"));
 }
 
-TEST_F(KVStoreTest, Size) {
+TEST_F(StoreTest, Size) {
     EXPECT_EQ(store.size(), 0);
     store.put("key1", "value1");
     EXPECT_EQ(store.size(), 1);
@@ -74,7 +74,7 @@ TEST_F(KVStoreTest, Size) {
     EXPECT_EQ(store.size(), 1);
 }
 
-TEST_F(KVStoreTest, EmptyKeyAndValue) {
+TEST_F(StoreTest, EmptyKeyAndValue) {
     store.put("", "empty_key_value");
     store.put("empty_value", "");
 
@@ -87,7 +87,7 @@ TEST_F(KVStoreTest, EmptyKeyAndValue) {
     EXPECT_EQ(*res2, "");
 }
 
-TEST_F(KVStoreTest, ConcurrentWrites) {
+TEST_F(StoreTest, ConcurrentWrites) {
     constexpr int kNumThreads = 10;
     constexpr int kWritesPerThread = 1000;
 
@@ -108,7 +108,7 @@ TEST_F(KVStoreTest, ConcurrentWrites) {
     EXPECT_EQ(store.size(), kNumThreads * kWritesPerThread);
 }
 
-TEST_F(KVStoreTest, ConcurrentReadsAndWrites) {
+TEST_F(StoreTest, ConcurrentReadsAndWrites) {
     // concurrency stress test - verify that store doesnt crash/deadlock/corrupt under concurrent
     // r/w pressure a broken locking logic would likely trigger UB; crashes, hangs or sanitizer
     // errors
@@ -144,7 +144,7 @@ TEST_F(KVStoreTest, ConcurrentReadsAndWrites) {
     EXPECT_TRUE(store.contains("shared_key"));
 }
 
-class KVStorePersistenceTest : public ::testing::Test {
+class StorePersistenceTest : public ::testing::Test {
    protected:
     void SetUp() override {
         test_dir_ = std::filesystem::temp_directory_path() / "kvstore_test";
@@ -158,19 +158,19 @@ class KVStorePersistenceTest : public ::testing::Test {
     std::filesystem::path wal_path_;
 };
 
-TEST_F(KVStorePersistenceTest, PersistsAcrossRestarts) {
+TEST_F(StorePersistenceTest, PersistsAcrossRestarts) {
     {
-        kvstore::Options opts;
+        StoreOptions opts;
         opts.persistence_path = wal_path_;
-        kvstore::KVStore store(opts);
+        Store store(opts);
 
         store.put("key1", "value1");
         store.put("key2", "value2");
     }
     {
-        kvstore::Options opts;
+        StoreOptions opts;
         opts.persistence_path = wal_path_;
-        kvstore::KVStore store(opts);
+        Store store(opts);
 
         auto result1 = store.get("key1");
         ASSERT_TRUE(result1.has_value());
@@ -182,11 +182,11 @@ TEST_F(KVStorePersistenceTest, PersistsAcrossRestarts) {
     }
 }
 
-TEST_F(KVStorePersistenceTest, PersistsRemove) {
+TEST_F(StorePersistenceTest, PersistsRemove) {
     {
-        kvstore::Options opts;
+        StoreOptions opts;
         opts.persistence_path = wal_path_;
-        kvstore::KVStore store(opts);
+        Store store(opts);
 
         store.put("key1", "value1");
         store.put("key2", "value2");
@@ -194,20 +194,20 @@ TEST_F(KVStorePersistenceTest, PersistsRemove) {
     }
 
     {
-        kvstore::Options opts;
+        StoreOptions opts;
         opts.persistence_path = wal_path_;
-        kvstore::KVStore store(opts);
+        Store store(opts);
 
         EXPECT_FALSE(store.contains("key1"));
         EXPECT_TRUE(store.contains("key2"));
     }
 }
 
-TEST_F(KVStorePersistenceTest, PersistsClear) {
+TEST_F(StorePersistenceTest, PersistsClear) {
     {
-        kvstore::Options opts;
+        StoreOptions opts;
         opts.persistence_path = wal_path_;
-        kvstore::KVStore store(opts);
+        Store store(opts);
 
         store.put("key1", "value1");
         store.put("key2", "value2");
@@ -216,9 +216,9 @@ TEST_F(KVStorePersistenceTest, PersistsClear) {
     }
 
     {
-        kvstore::Options opts;
+        StoreOptions opts;
         opts.persistence_path = wal_path_;
-        kvstore::KVStore store(opts);
+        Store store(opts);
 
         EXPECT_FALSE(store.contains("key1"));
         EXPECT_FALSE(store.contains("key2"));
@@ -226,11 +226,11 @@ TEST_F(KVStorePersistenceTest, PersistsClear) {
     }
 }
 
-TEST_F(KVStorePersistenceTest, PersistsOverwrite) {
+TEST_F(StorePersistenceTest, PersistsOverwrite) {
     {
-        kvstore::Options opts;
+        StoreOptions opts;
         opts.persistence_path = wal_path_;
-        kvstore::KVStore store(opts);
+        Store store(opts);
 
         store.put("key1", "value1");
         store.put("key1", "value2");
@@ -238,9 +238,9 @@ TEST_F(KVStorePersistenceTest, PersistsOverwrite) {
     }
 
     {
-        kvstore::Options opts;
+        StoreOptions opts;
         opts.persistence_path = wal_path_;
-        kvstore::KVStore store(opts);
+        Store store(opts);
 
         auto result = store.get("key1");
         ASSERT_TRUE(result.has_value());
@@ -248,4 +248,4 @@ TEST_F(KVStorePersistenceTest, PersistsOverwrite) {
     }
 }
 
-}  // namespace kvstore::test
+}  // namespace kvstore::core::test

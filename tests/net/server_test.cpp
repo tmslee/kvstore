@@ -1,4 +1,4 @@
-#include "kvstore/server.hpp"
+#include "kvstore/net/server.hpp"
 
 #include <arpa/inet.h>
 #include <gtest/gtest.h>
@@ -10,17 +10,17 @@
 #include <string>
 #include <thread>
 
-#include "kvstore/kvstore.hpp"
+#include "kvstore/core/store.hpp"
 
-namespace kvstore::test {
+namespace kvstore::net::test {
 class ServerTest : public ::testing::Test {
    protected:
     void SetUp() override {
-        store_ = std::make_unique<kvstore::KVStore>();
-        kvstore::ServerOptions opts;
+        store_ = std::make_unique<core::Store>();
+        ServerOptions opts;
         opts.port =
             16379;  // test port; avoid conflicts with real redis. ports above 1024 dont need root
-        server_ = std::make_unique<kvstore::Server>(*store_, opts);
+        server_ = std::make_unique<Server>(*store_, opts);
     }
 
     void TearDown() override {
@@ -85,8 +85,8 @@ class ServerTest : public ::testing::Test {
     // we use std::unique_ptr so we can control construction timing in Setup() - if plain members,
     // object would be constructed during fixture construction, before Setup(). also allows
     // tearDown() to destroy early if needed
-    std::unique_ptr<kvstore::KVStore> store_;
-    std::unique_ptr<kvstore::Server> server_;
+    std::unique_ptr<core::Store> store_;
+    std::unique_ptr<Server> server_;
 };
 
 TEST_F(ServerTest, Ping) {
@@ -149,4 +149,4 @@ TEST_F(ServerTest, UnkownCommand) {
     EXPECT_TRUE(response.find("ERROR") != std::string::npos);
 }
 
-}  // namespace kvstore::test
+}  // namespace kvstore::net::test

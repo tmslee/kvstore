@@ -1,4 +1,4 @@
-#include "kvstore/server.hpp"
+#include "kvstore/net/server.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -11,11 +11,12 @@
 #include <sstream>
 #include <stdexcept>
 
-#include "kvstore/protocol.hpp"
+#include "kvstore/net/protocol.hpp"
 
-namespace kvstore {
+namespace kvstore::net {
 
-Server::Server(KVStore& store, const ServerOptions& options) : store_(store), options_(options) {}
+Server::Server(core::Store& store, const ServerOptions& options)
+    : store_(store), options_(options) {}
 
 Server::~Server() {
     // destructor should NOT throw.
@@ -273,4 +274,4 @@ CommandResult Server::process_command(const std::string& line) {
     return Protocol::error("unkown command: " + cmd.command);
 }
 
-}  // namespace kvstore
+}  // namespace kvstore::net

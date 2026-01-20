@@ -1,17 +1,17 @@
-#include "kvstore/kvstore.hpp"
+#include "kvstore/core/store.hpp"
 
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
 
-#include "kvstore/wal.hpp"
+#include "kvstore/core/wal.hpp"
 
-namespace kvstore {
+namespace kvstore::core {
 
-class KVStore::Impl {
+class Store::Impl {
    public:
     Impl() = default;
-    explicit Impl(const Options& options) {
+    explicit Impl(const StoreOptions& options) {
         if (options.persistence_path.has_value()) {
             wal_ = std::make_unique<WriteAheadLog>(options.persistence_path.value());
             recover();
@@ -87,41 +87,41 @@ class KVStore::Impl {
     std::unique_ptr<WriteAheadLog> wal_;
 };
 
-KVStore::KVStore() : impl_(std::make_unique<Impl>()) {}
+Store::Store() : impl_(std::make_unique<Impl>()) {}
 
-KVStore::KVStore(const Options& options) : impl_(std::make_unique<Impl>(options)) {}
+Store::Store(const StoreOptions& options) : impl_(std::make_unique<Impl>(options)) {}
 
-KVStore::~KVStore() = default;
+Store::~Store() = default;
 
-KVStore::KVStore(KVStore&&) noexcept = default;
+Store::Store(Store&&) noexcept = default;
 
-KVStore& KVStore::operator=(KVStore&&) noexcept = default;
+Store& Store::operator=(Store&&) noexcept = default;
 
-void KVStore::put(std::string_view key, std::string_view value) {
+void Store::put(std::string_view key, std::string_view value) {
     impl_->put(key, value);
 }
-std::optional<std::string> KVStore::get(std::string_view key) const {
+std::optional<std::string> Store::get(std::string_view key) const {
     return impl_->get(key);
 }
 
-bool KVStore::remove(std::string_view key) {
+bool Store::remove(std::string_view key) {
     return impl_->remove(key);
 }
 
-bool KVStore::contains(std::string_view key) const {
+bool Store::contains(std::string_view key) const {
     return impl_->contains(key);
 }
 
-std::size_t KVStore::size() const noexcept {
+std::size_t Store::size() const noexcept {
     return impl_->size();
 }
 
-bool KVStore::empty() const noexcept {
+bool Store::empty() const noexcept {
     return impl_->empty();
 }
 
-void KVStore::clear() noexcept {
+void Store::clear() noexcept {
     impl_->clear();
 }
 
-}  // namespace kvstore
+}  // namespace kvstore::core

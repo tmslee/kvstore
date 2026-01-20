@@ -1,8 +1,8 @@
-#include "kvstore/protocol.hpp"
+#include "kvstore/net/protocol.hpp"
 
 #include <gtest/gtest.h>
 
-namespace kvstore::test {
+namespace kvstore::net::test {
 
 TEST(ProtocolTest, ParseSimpleCommand) {
     auto cmd = Protocol::parse("GET key1");
@@ -84,4 +84,4 @@ TEST(ProtocolTest, ErrorDoesNotCloseConnection) {
     EXPECT_FALSE(Protocol::error("err").close_connection);
 }
 
-}  // namespace kvstore::test
+}  // namespace kvstore::net::test

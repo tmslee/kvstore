@@ -1,10 +1,10 @@
-#ifndef KVSTORE_PROTOCOL_HPP
-#define KVSTORE_PROTOCOL_HPP
+#ifndef KVSTORE_NET_PROTOCOL_HPP
+#define KVSTORE_NET_PROTOCOL_HPP
 
 #include <string>
 #include <vector>
 
-namespace kvstore {
+namespace kvstore::net {
 
 enum class StatusCode {
     Ok,
@@ -38,6 +38,6 @@ class Protocol {
     [[nodiscard]] static CommandResult bye();
 };
 
-}  // namespace kvstore
+}  // namespace kvstore::net
 
 #endif
