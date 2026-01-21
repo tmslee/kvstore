@@ -2,9 +2,12 @@
 #define KVSTORE_NET_CLIENT_HPP
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+
+#include "kvstore/util/types.hpp"
 
 namespace kvstore::net {
 
@@ -47,6 +50,7 @@ class Client {
     */
 
     void put(std::string_view key, std::string_view value);
+    void put(std::string_view key, std::string_view value, util::Duration ttl);
     [[nodiscard]] std::optional<std::string> get(std::string_view key);
     [[nodiscard]] bool remove(std::string_view key);
     [[nodiscard]] bool contains(std::string_view key);
@@ -55,11 +59,8 @@ class Client {
     [[nodiscard]] bool ping();
 
    private:
-    std::string send_command(const std::string& command);
-    std::string read_response();
-
-    ClientOptions options_;
-    int socket_fd_ = -1;
+    class Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace kvstore::net
