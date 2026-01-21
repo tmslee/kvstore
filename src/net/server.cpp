@@ -8,8 +8,8 @@
 #include <atomic>
 #include <cstring>
 #include <iostream>
-#include <stdexcept>
 #include <mutex>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -18,9 +18,8 @@
 namespace kvstore::net {
 
 class Server::Impl {
-public:
-    Impl(core::Store& store, const ServerOptions& options)
-    : store_(store), options_(options) {}
+   public:
+    Impl(core::Store& store, const ServerOptions& options) : store_(store), options_(options) {}
 
     ~Impl() {
         // destructor should NOT throw.
@@ -42,9 +41,10 @@ public:
         std::atomic - not copyable, movable
         std::vector<std::thread> - not copyabl, moveable
         - because of mutex, compiler auto deletes both for Impl
-        - but also we dont care because we never copy or move Impl direcly, only move unique_ptr<Impl>
-    */ 
-    
+        - but also we dont care because we never copy or move Impl direcly, only move
+       unique_ptr<Impl>
+    */
+
     void start() {
         /*
             1. create socket with protocols (IPv4 & TCP)
@@ -64,8 +64,8 @@ public:
         }
 
         int opt = 1;
-        // SO_REUSEADDR lets us rebind to port immediately after restart. without it you get "address
-        // already in use" for ~30s after stopping
+        // SO_REUSEADDR lets us rebind to port immediately after restart. without it you get
+        // "address already in use" for ~30s after stopping
         /*
             SOL_SOCKET speicifed level at which option is defined:
             SOL_SOCKET (generic socket layer) : SO_REUSEADDR, SO_KEEPALIVE, SO_RCVBUF ...
@@ -82,8 +82,8 @@ public:
         addr.sin_family = AF_INET;
         addr.sin_port = htons(options_.port);
 
-        // inet_pton (inet presentation to network) converts string IP("127.0.0.1") to binary format &
-        // store in addr.sin_addr
+        // inet_pton (inet presentation to network) converts string IP("127.0.0.1") to binary format
+        // & store in addr.sin_addr
         if (inet_pton(AF_INET, options_.host.c_str(), &addr.sin_addr) <= 0) {
             close(fd);
             throw std::runtime_error("invalid address: " + options_.host);
@@ -91,8 +91,8 @@ public:
 
         // bind associated socket with specific address and port
         // before bind, socket exists but has no address -> OS doesnt know where to route incoming
-        // packets after bind, socket bound to 127.0.0.1:6379. OS routes packets for that addr/port to
-        // this socket
+        // packets after bind, socket bound to 127.0.0.1:6379. OS routes packets for that addr/port
+        // to this socket
         if (bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
             close(fd);
             throw std::runtime_error("failed to bind to port" + std::to_string(options_.port));
@@ -149,7 +149,7 @@ public:
         return options_.port;
     }
 
-private:
+   private:
     void accept_loop() {
         while (running_) {
             sockaddr_in client_addr{};
@@ -160,7 +160,8 @@ private:
                 break;
             }
 
-            int client_fd = accept(server_fd_, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
+            int client_fd =
+                accept(server_fd_, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
             if (client_fd < 0) {
                 if (running_) {  // retry if we're still running
                     continue;
@@ -186,8 +187,8 @@ private:
             }
 
             // null-terminate the chunk @ end of bytes read and append to buffer
-            // chunk is a C-string: without null term it would read past valid data into garbage memory.
-            // alternatively, buffer.append(chunk, bytes_read);
+            // chunk is a C-string: without null term it would read past valid data into garbage
+            // memory. alternatively, buffer.append(chunk, bytes_read);
             /*
                 IMPORTANT NOTE: network APIs are C functions. we use c-strings (null terminated
             character) because:
@@ -199,8 +200,8 @@ private:
             buffer += chunk;
 
             size_t pos;
-            // while we have complete lines in our buffer, extract the line from buffer (1 full command)
-            // and process it.
+            // while we have complete lines in our buffer, extract the line from buffer (1 full
+            // command) and process it.
             while ((pos = buffer.find('\n')) != std::string::npos) {
                 std::string line = buffer.substr(0, pos);
                 buffer.erase(0, pos + 1);
@@ -246,7 +247,8 @@ private:
             }
             std::string value;
             for (size_t i = 1; i < cmd.args.size(); ++i) {
-                if (i > 1) value += " ";
+                if (i > 1)
+                    value += " ";
                 value += cmd.args[i];
             }
             store_.put(cmd.args[0], value);
@@ -259,12 +261,13 @@ private:
             auto ttl = util::Duration(std::stoll(cmd.args[1]));
             std::string value;
             for (size_t i = 2; i < cmd.args.size(); ++i) {
-                if (i > 2) value += " ";
+                if (i > 2)
+                    value += " ";
                 value += cmd.args[i];
             }
             store_.put(cmd.args[0], value, ttl);
             return Protocol::ok();
-            
+
         } else if (cmd.command == "DEL" || cmd.command == "DELETE" || cmd.command == "REMOVE") {
             if (cmd.args.size() != 1) {
                 return Protocol::error("usage: DEL key");
@@ -313,7 +316,7 @@ private:
     std::mutex clients_mutex_;
 };
 
-//PIMPL INTERFACE -------------------------------------------------------------------------------
+// PIMPL INTERFACE -------------------------------------------------------------------------------
 Server::Server(core::Store& store, const ServerOptions& options)
     : impl_(std::make_unique<Impl>(store, options)) {}
 Server::~Server() = default;

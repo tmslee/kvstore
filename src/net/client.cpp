@@ -12,7 +12,7 @@ namespace kvstore::net {
 namespace util = kvstore::util;
 
 class Client::Impl {
-public:
+   public:
     explicit Impl(const ClientOptions& options) : options_(options) {}
 
     ~Impl() {
@@ -52,7 +52,7 @@ public:
             close(socket_fd_);
             socket_fd_ = -1;
             throw std::runtime_error("failed to connect to " + options_.host + ":" +
-                                    std::to_string(options_.port));
+                                     std::to_string(options_.port));
         }
     }
 
@@ -68,8 +68,8 @@ public:
     }
 
     /*
-        note: we throw in user operations because errors are rare and unrecoverable (network down = cant
-    continue anyway)
+        note: we throw in user operations because errors are rare and unrecoverable (network down =
+    cant continue anyway)
     */
     void put(std::string_view key, std::string_view value) {
         std::string cmd = "PUT " + std::string(key) + " " + std::string(value);
@@ -81,8 +81,8 @@ public:
     }
 
     void put(std::string_view key, std::string_view value, util::Duration ttl) {
-        std::string cmd = "PUTEX " + std::string(key) + " " + 
-                      std::to_string(ttl.count()) + " " + std::string(value);
+        std::string cmd = "PUTEX " + std::string(key) + " " + std::to_string(ttl.count()) + " " +
+                          std::string(value);
         std::string response = send_command(cmd);
 
         if (response.substr(0, 2) != "OK") {
@@ -159,7 +159,7 @@ public:
         }
     }
 
-private:
+   private:
     std::string send_command(const std::string& command) {
         if (socket_fd_ < 0) {
             throw std::runtime_error("not connected");
@@ -203,9 +203,8 @@ private:
     int socket_fd_ = -1;
 };
 
-//PIMPL INTERFACE ------------------------------------------------------------------------
-Client::Client(const ClientOptions& options)
-    : impl_(std::make_unique<Impl>(options)) {}
+// PIMPL INTERFACE ------------------------------------------------------------------------
+Client::Client(const ClientOptions& options) : impl_(std::make_unique<Impl>(options)) {}
 Client::~Client() = default;
 Client::Client(Client&&) noexcept = default;
 Client& Client::operator=(Client&&) noexcept = default;

@@ -2,10 +2,10 @@
 #define KVSTORE_NET_CLIENT_HPP
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <memory>
 
 #include "kvstore/util/types.hpp"
 
