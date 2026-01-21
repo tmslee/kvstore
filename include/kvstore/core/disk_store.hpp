@@ -20,7 +20,7 @@ struct DiskStoreOptions {
     std::shared_ptr<util::Clock> clock = std::make_shared<util::SystemClock>();
 };
 
-class DiskStore {
+class DiskStore : public IStore {
    public:
     explicit DiskStore(const DiskStoreOptions& options);
     ~DiskStore();

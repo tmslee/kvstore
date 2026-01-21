@@ -265,13 +265,13 @@ bool Store::remove(std::string_view key) {
 bool Store::contains(std::string_view key) {
     return impl_->contains(key);
 }
-std::size_t Store::size() const noexcept {
+std::size_t Store::size() const {
     return impl_->size();
 }
-bool Store::empty() const noexcept {
+bool Store::empty() const {
     return impl_->empty();
 }
-void Store::clear() noexcept {
+void Store::clear() {
     impl_->clear();
 }
 void Store::snapshot() {

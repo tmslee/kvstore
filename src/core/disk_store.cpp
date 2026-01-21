@@ -398,10 +398,10 @@ bool DiskStore::remove(std::string_view key) {
 bool DiskStore::contains(std::string_view key) {
     return impl_->contains(key);
 }
-std::size_t DiskStore::size() const noexcept {
+std::size_t DiskStore::size() const {
     return impl_->size();
 }
-bool DiskStore::empty() const noexcept {
+bool DiskStore::empty() const {
     return impl_->empty();
 }
 void DiskStore::clear() {

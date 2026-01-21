@@ -1,5 +1,5 @@
-#ifndef KVSTORE_CORE_STORE_HPP
-#define KVSTORE_CORE_STORE_HPP
+#ifndef KVSTORE_CORE_ISTORE_HPP
+#define KVSTORE_CORE_ISTORE_HPP
 
 #include "kvstore/util/types.hpp"
 
@@ -12,10 +12,10 @@ namespace kvstore::core {
 
 class IStore {
 public:
-    virtual ~IStore() = default
+    virtual ~IStore() = default;
     
     virtual void put(std::string_view key, std::string_view value) = 0;
-    virtual void put(std::string_View key, std::string_view value, util::Duration ttl) = 0;
+    virtual void put(std::string_view key, std::string_view value, util::Duration ttl) = 0;
 
     [[nodiscard]] virtual std::optional<std::string> get(std::string_view key) = 0;
     [[nodiscard]] virtual bool remove(std::string_view key) = 0;
