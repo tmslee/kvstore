@@ -1,19 +1,19 @@
 #ifndef KVSTORE_CORE_ISTORE_HPP
 #define KVSTORE_CORE_ISTORE_HPP
 
-#include "kvstore/util/types.hpp"
-
 #include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
 
+#include "kvstore/util/types.hpp"
+
 namespace kvstore::core {
 
 class IStore {
-public:
+   public:
     virtual ~IStore() = default;
-    
+
     virtual void put(std::string_view key, std::string_view value) = 0;
     virtual void put(std::string_view key, std::string_view value, util::Duration ttl) = 0;
 
@@ -26,6 +26,6 @@ public:
     virtual void clear() = 0;
 };
 
-} //namespace kvstore::core
+}  // namespace kvstore::core
 
 #endif

@@ -8,9 +8,9 @@
 #include <string>
 #include <string_view>
 
+#include "kvstore/core/istore.hpp"
 #include "kvstore/util/clock.hpp"
 #include "kvstore/util/types.hpp"
-#include "kvstore/core/istore.hpp"
 
 namespace kvstore::core {
 
