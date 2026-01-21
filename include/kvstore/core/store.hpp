@@ -10,6 +10,7 @@
 
 #include "kvstore/util/clock.hpp"
 #include "kvstore/util/types.hpp"
+#include "kvstore/core/istore.hpp"
 
 namespace kvstore::core {
 
@@ -20,25 +21,25 @@ struct StoreOptions {
     std::shared_ptr<util::Clock> clock = std::make_shared<util::SystemClock>();
 };
 
-class Store {
+class Store : public IStore {
    public:
     Store();
     explicit Store(const StoreOptions& options);
-    ~Store();
+    ~Store() override;
 
     /*
         we delete copies bc this class will hold a mutex internally - cannot be copied.
         also copying a potentially large data store is expesive.
         if someone truly needs a copy, they should be explicit abt it (we can provide clone()
        method)
-    */
-    Store(const Store&) = delete;
-    Store& operator=(const Store&) = delete;
-    /*
+
         standard containers (i.e. std::vector) check if your move ops are noexcept before
        reallocation if your ctor can throw, vector::push_back will copy instead of move for
        exception safety noexcept moves enable optimal container behavior
     */
+
+    Store(const Store&) = delete;
+    Store& operator=(const Store&) = delete;
     Store(Store&&) noexcept;
     Store& operator=(Store&&) noexcept;
 
@@ -50,11 +51,11 @@ class Store {
         get: same lookup concerns as above + we return std::optional<std:;string> which means
        constructing a new std::string -> allocation = can throw.
     */
-    void put(std::string_view key, std::string_view value);
-    void put(std::string_view key, std::string_view, util::Duration ttl);
+    void put(std::string_view key, std::string_view value) override;
+    void put(std::string_view key, std::string_view, util::Duration ttl) override;
 
-    [[nodiscard]] std::optional<std::string> get(std::string_view key);
-    [[nodiscard]] bool remove(std::string_view key);
+    [[nodiscard]] std::optional<std::string> get(std::string_view key) override;
+    [[nodiscard]] bool remove(std::string_view key) override;
     /*
         note: we use string_view for read-only access (function parameters)
         other use cases: parsing/tokenizing, passing string literals, function returns when lifetime
@@ -66,11 +67,12 @@ class Store {
             - need null-termination - string_view is NOT null-terminated
     */
 
-    [[nodiscard]] bool contains(std::string_view key);
-    [[nodiscard]] std::size_t size() const noexcept;
-    [[nodiscard]] bool empty() const noexcept;
+    [[nodiscard]] bool contains(std::string_view key) override;
+    [[nodiscard]] std::size_t size() const noexcept override;
+    [[nodiscard]] bool empty() const noexcept override;
 
-    void clear() noexcept;
+    void clear() noexcept override;
+    
     void snapshot();
     void cleanup_expired();
 
