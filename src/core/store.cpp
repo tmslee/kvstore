@@ -11,16 +11,16 @@
 
 namespace kvstore::core {
 
-using namespace kvstore::util;
+namespace util = kvstore::util;
 
 struct Entry {
     std::string value;
-    std::optional<TimePoint> expires_at = std::nullopt;
+    std::optional<util::TimePoint> expires_at = std::nullopt;
 };
 
 class Store::Impl {
    public:
-    Impl() : clock_(std::make_shared<SystemClock>()) {}
+    Impl() : clock_(std::make_shared<util::SystemClock>()) {}
 
     explicit Impl(const StoreOptions& options) : options_(options), clock_(options.clock) {
         // IMPORTANT: load snapshot first THEN WAL
@@ -28,10 +28,10 @@ class Store::Impl {
             snapshot_ = std::make_unique<Snapshot>(options_.snapshot_path.value());
             if (snapshot_->exists()) {
                 snapshot_->load([this](std::string_view key, std::string_view value,
-                                       ExpirationTime expires_at_ms) {
-                    std::optional<TimePoint> expires_at = std::nullopt;
+                                       util::ExpirationTime expires_at_ms) {
+                    std::optional<util::TimePoint> expires_at = std::nullopt;
                     if (expires_at_ms.has_value()) {
-                        expires_at = from_epoch_ms(expires_at_ms.value());
+                        expires_at = util::from_epoch_ms(expires_at_ms.value());
                     }
                     if (!expires_at.has_value() || expires_at.value() > clock_->now()) {
                         data_[std::string(key)] = Entry{std::string(value), expires_at};
@@ -47,24 +47,38 @@ class Store::Impl {
     }
 
     void put(std::string_view key, std::string_view value) {
-        std::unique_lock lock(mutex_);
-        if (wal_) {
-            wal_->log_put(key, value);
-            ++wal_entries_since_snapshot_;
-            maybe_snapshot();
+        bool should_snapshot = false;
+        {
+            std::unique_lock lock(mutex_);
+            if (wal_) {
+                wal_->log_put(key, value);
+                ++wal_entries_since_snapshot_;
+                should_snapshot =
+                    snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
+            }
+            data_[std::string(key)] = Entry{std::string(value), std::nullopt};
         }
-        data_[std::string(key)] = Entry{std::string(value), std::nullopt};
+        if (should_snapshot) {
+            try_auto_snapshot();
+        }
     }
 
-    void put(std::string_view key, std::string_view value, Duration ttl) {
-        std::unique_lock lock(mutex_);
-        auto expires_at = clock_->now() + ttl;
-        if (wal_) {
-            wal_->log_put_with_ttl(key, value, to_epoch_ms(expires_at));
-            ++wal_entries_since_snapshot_;
-            maybe_snapshot();
+    void put(std::string_view key, std::string_view value, util::Duration ttl) {
+        bool should_snapshot = false;
+        {
+            std::unique_lock lock(mutex_);
+            auto expires_at = clock_->now() + ttl;
+            if (wal_) {
+                wal_->log_put_with_ttl(key, value, util::to_epoch_ms(expires_at));
+                ++wal_entries_since_snapshot_;
+                should_snapshot =
+                    snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
+            }
+            data_[std::string(key)] = Entry{std::string(value), expires_at};
         }
-        data_[std::string(key)] = Entry{std::string(value), expires_at};
+        if (should_snapshot) {
+            try_auto_snapshot();
+        }
     }
 
     [[nodiscard]] std::optional<std::string> get(std::string_view key) {
@@ -81,13 +95,22 @@ class Store::Impl {
     }
 
     [[nodiscard]] bool remove(std::string_view key) {
-        std::unique_lock lock(mutex_);
-        if (wal_) {
-            wal_->log_remove(key);
-            ++wal_entries_since_snapshot_;
-            maybe_snapshot();
+        bool should_snapshot = false;
+        bool removed = false;
+        {
+            std::unique_lock lock(mutex_);
+            if (wal_) {
+                wal_->log_remove(key);
+                ++wal_entries_since_snapshot_;
+                should_snapshot =
+                    snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
+            }
+            removed = data_.erase(std::string(key)) > 0;
         }
-        return data_.erase(std::string(key)) > 0;
+        if (should_snapshot) {
+            try_auto_snapshot();
+        }
+        return removed;
     }
 
     [[nodiscard]] bool contains(std::string_view key) {
@@ -114,13 +137,20 @@ class Store::Impl {
     }
 
     void clear() noexcept {
-        std::unique_lock lock(mutex_);
-        if (wal_) {
-            wal_->log_clear();
-            ++wal_entries_since_snapshot_;
-            maybe_snapshot();
+        bool should_snapshot = false;
+        {
+            std::unique_lock lock(mutex_);
+            if (wal_) {
+                wal_->log_clear();
+                ++wal_entries_since_snapshot_;
+                should_snapshot =
+                    snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
+            }
+            data_.clear();
         }
-        data_.clear();
+        if (should_snapshot) {
+            try_auto_snapshot();
+        }
     }
 
     void snapshot() {
@@ -150,13 +180,13 @@ class Store::Impl {
 
     void recover() {
         wal_->replay([this](EntryType type, std::string_view key, std::string_view value,
-                            ExpirationTime expires_at_ms) {
+                            util::ExpirationTime expires_at_ms) {
             switch (type) {
                 case EntryType::Put:
                     data_[std::string(key)] = Entry{std::string(value), std::nullopt};
                     break;
                 case EntryType::PutWithTTL: {
-                    auto expires_at = from_epoch_ms(expires_at_ms.value());
+                    auto expires_at = util::from_epoch_ms(expires_at_ms.value());
                     if (expires_at > clock_->now()) {
                         data_[std::string(key)] = Entry{std::string(value), expires_at};
                     }
@@ -172,7 +202,10 @@ class Store::Impl {
         });
     }
 
-    void maybe_snapshot() {
+    // try_auto_snapshot does another state check under a lock to ensure no double snapshotting
+    // across threads
+    void try_auto_snapshot() {
+        std::unique_lock lock(mutex_);
         if (snapshot_ && wal_entries_since_snapshot_ >= options_.snapshot_threshold) {
             do_snapshot();
         }
@@ -186,9 +219,9 @@ class Store::Impl {
         snapshot_->save([this](EntryEmitter emit) {
             for (const auto& [key, entry] : data_) {
                 if (!is_expired(entry)) {
-                    ExpirationTime expires_at_ms = std::nullopt;
+                    util::ExpirationTime expires_at_ms = std::nullopt;
                     if (entry.expires_at.has_value()) {
-                        expires_at_ms = to_epoch_ms(entry.expires_at.value());
+                        expires_at_ms = util::to_epoch_ms(entry.expires_at.value());
                     }
                     emit(key, entry.value, expires_at_ms);
                 }
@@ -203,7 +236,7 @@ class Store::Impl {
     }
 
     StoreOptions options_;
-    std::shared_ptr<Clock> clock_;
+    std::shared_ptr<util::Clock> clock_;
     mutable std::shared_mutex mutex_;
     std::unordered_map<std::string, Entry> data_;
     std::unique_ptr<WriteAheadLog> wal_;
@@ -211,51 +244,39 @@ class Store::Impl {
     std::size_t wal_entries_since_snapshot_ = 0;
 };
 
+// PIMPL INTERFACE --------------------------------------------------------------------
 Store::Store() : impl_(std::make_unique<Impl>()) {}
-
 Store::Store(const StoreOptions& options) : impl_(std::make_unique<Impl>(options)) {}
-
 Store::~Store() = default;
-
 Store::Store(Store&&) noexcept = default;
-
 Store& Store::operator=(Store&&) noexcept = default;
-
 void Store::put(std::string_view key, std::string_view value) {
     impl_->put(key, value);
 }
-
-void Store::put(std::string_view key, std::string_view value, Duration ttl) {
+void Store::put(std::string_view key, std::string_view value, util::Duration ttl) {
     impl_->put(key, value, ttl);
 }
 std::optional<std::string> Store::get(std::string_view key) {
     return impl_->get(key);
 }
-
 bool Store::remove(std::string_view key) {
     return impl_->remove(key);
 }
-
 bool Store::contains(std::string_view key) {
     return impl_->contains(key);
 }
-
 std::size_t Store::size() const noexcept {
     return impl_->size();
 }
-
 bool Store::empty() const noexcept {
     return impl_->empty();
 }
-
 void Store::clear() noexcept {
     impl_->clear();
 }
-
 void Store::snapshot() {
     impl_->snapshot();
 }
-
 void Store::cleanup_expired() {
     impl_->cleanup_expired();
 }

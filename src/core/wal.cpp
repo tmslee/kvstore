@@ -6,7 +6,7 @@
 
 namespace kvstore::core {
 
-using namespace kvstore::util;
+namespace util = kvstore::util;
 
 // note: std::ios::binary | std::ios::app are both binary flags and are being OR'ed
 // binary: dont translate newlines, write raw bytes exactly as given
@@ -43,18 +43,18 @@ WriteAheadLog& WriteAheadLog::operator=(WriteAheadLog&& other) noexcept {
 }
 
 void WriteAheadLog::write_header() {
-    write_uint32(out_, kMagic);
-    write_uint32(out_, kVersion);
+    util::write_uint32(out_, kMagic);
+    util::write_uint32(out_, kVersion);
     out_.flush();
 }
 
 bool WriteAheadLog::validate_header(std::ifstream& in) {
-    uint32_t magic = read_uint32(in);
+    uint32_t magic = util::read_uint32(in);
     if (!in.good() || magic != kMagic) {
         return false;
     }
 
-    uint32_t version = read_uint32(in);
+    uint32_t version = util::read_uint32(in);
     if (!in.good() || version != kVersion) {
         return false;
     }
@@ -84,39 +84,39 @@ void WriteAheadLog::log_clear() {
 }
 
 void WriteAheadLog::write_entry(EntryType type, std::string_view key, std::string_view value) {
-    write_uint8(out_, static_cast<uint8_t>(type));
-    write_string(out_, key);
-    write_string(out_, value);
+    util::write_uint8(out_, static_cast<uint8_t>(type));
+    util::write_string(out_, key);
+    util::write_string(out_, value);
     out_.flush();
 }
 
 void WriteAheadLog::write_entry_with_ttl(EntryType type, std::string_view key,
                                          std::string_view value, int64_t expires_at_ms) {
-    write_uint8(out_, static_cast<uint8_t>(type));
-    write_string(out_, key);
-    write_string(out_, value);
-    write_int64(out_, expires_at_ms);
+    util::write_uint8(out_, static_cast<uint8_t>(type));
+    util::write_string(out_, key);
+    util::write_string(out_, value);
+    util::write_int64(out_, expires_at_ms);
     out_.flush();
 }
 
 bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& key,
-                               std::string& value, ExpirationTime& expires_at) {
+                               std::string& value, util::ExpirationTime& expires_at) {
     // we return bool instead of throwing because end of file is expected, not exceptional
     // not being able to read successfully is an expected pattern eventually
-    uint8_t type_byte = read_uint8(in);
+    uint8_t type_byte = util::read_uint8(in);
     if (!in.good()) {
         return false;
     }
     type = static_cast<EntryType>(type_byte);
 
-    if (!read_string(in, key)) {
+    if (!util::read_string(in, key)) {
         return false;
     }
-    if (!read_string(in, value)) {
+    if (!util::read_string(in, value)) {
         return false;
     }
     if (type == EntryType::PutWithTTL) {
-        expires_at = read_int64(in);
+        expires_at = util::read_int64(in);
         if (!in.good()) {
             return false;
         }
@@ -127,7 +127,8 @@ bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& 
 }
 
 void WriteAheadLog::replay(
-    std::function<void(EntryType, std::string_view, std::string_view, ExpirationTime)> callback) {
+    std::function<void(EntryType, std::string_view, std::string_view, util::ExpirationTime)>
+        callback) {
     std::lock_guard lock(mutex_);
 
     std::ifstream in(path_, std::ios::binary);
@@ -142,7 +143,7 @@ void WriteAheadLog::replay(
     EntryType type{};
     std::string key;
     std::string value;
-    ExpirationTime expires_at;
+    util::ExpirationTime expires_at;
     // try to read entry sequentially until end of file or failure
     while (read_entry(in, type, key, value, expires_at)) {
         callback(type, key, value, expires_at);
