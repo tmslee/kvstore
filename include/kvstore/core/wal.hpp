@@ -55,6 +55,8 @@ class WriteAheadLog {
     [[nodiscard]] std::size_t size() const;
 
    private:
+    void write_header();
+    bool validate_header(std::ifstream& in);
     void write_entry(EntryType type, std::string_view key, std::string_view value);
     void write_entry_with_ttl(EntryType type, std::string_view key, std::string_view value,
                               int64_t expires_at_ms);
