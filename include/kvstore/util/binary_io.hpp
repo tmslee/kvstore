@@ -8,7 +8,14 @@
 #include <string_view>
 
 namespace kvstore::util{
+/*
+    note: we have both uint64(8bytes) and uint32(4bytes) for different purposes
+    - uint64 for entry count -> need more range
+    - uint32 for string lengths
 
+    when we read/write strings we always do length then data
+    stream read() and write() take char*. we reinterpret_cast<const char*> to treat this integer's memory as raw bytes
+*/
 
 inline void write_uint8(std::ostream& out, uint8_t value) {
     out.write(reinterpret_cast<const char*>(&value), sizeof(value));

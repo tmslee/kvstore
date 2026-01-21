@@ -124,7 +124,7 @@ bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& 
 }
 
 void WriteAheadLog::replay(
-    std::function<void(EntryType, std::string_view, std::string_view, util::ExpirationTime)> callback) {
+    std::function<void(EntryType, std::string_view, std::string_view, ExpirationTime)> callback) {
     std::lock_guard lock(mutex_);
 
     std::ifstream in(path_, std::ios::binary);
@@ -139,7 +139,7 @@ void WriteAheadLog::replay(
     EntryType type{};
     std::string key;
     std::string value;
-    util::ExpirationTime expires_at;
+    ExpirationTime expires_at;
     // try to read entry sequentially until end of file or failure
     while (read_entry(in, type, key, value, expires_at)) {
         callback(type, key, value, expires_at);

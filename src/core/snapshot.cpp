@@ -1,71 +1,12 @@
 #include "kvstore/core/snapshot.hpp"
+#include "kvstore/util/binary_io.hpp"
 
 #include <fstream>
 #include <stdexcept>
 
 namespace kvstore::core {
 
-namespace {
-
-/*
-    note: we have both uint64(8bytes) and uint32(4bytes) for different purposes
-    - uint64 for entry count -> need more range
-    - uint32 for string lengths
-
-    when we read/write we always do length then data
-
-    stream read() and write() take char*. we reinterpret_cast<const char*> to treat this integer's
-   memory as raw bytes
-*/
-void write_uint64(std::ostream& out, uint64_t value) {
-    out.write(reinterpret_cast<const char*>(&value), sizeof(value));
-}
-
-uint64_t read_uint64(std::istream& in) {
-    uint64_t value = 0;
-    in.read(reinterpret_cast<char*>(&value), sizeof(value));
-    return value;
-}
-
-void write_uint32(std::ostream& out, uint32_t value) {
-    out.write(reinterpret_cast<const char*>(&value), sizeof(value));
-}
-
-uint32_t read_uint32(std::istream& in) {
-    uint32_t value = 0;
-    in.read(reinterpret_cast<char*>(&value), sizeof(value));
-    return value;
-}
-
-void write_int64(std::ostream& out, int64_t value) {
-    out.write(reinterpret_cast<const char*>(&value), sizeof(value));
-}
-
-int64_t read_int64(std::istream& in) {
-    int64_t value = 0;
-    in.read(reinterpret_cast<char*>(&value), sizeof(value));
-    return value;
-}
-
-void write_string(std::ostream& out, std::string_view str) {
-    write_uint32(out, static_cast<uint32_t>(str.size()));
-    out.write(str.data(), static_cast<std::streamsize>(str.size()));
-}
-
-bool read_string(std::istream& in, std::string& str) {
-    uint32_t len = read_uint32(in);
-    if (!in.good()) {
-        return false;
-    }
-    str.resize(len);
-    in.read(str.data(), len);
-    return in.good();
-}
-
-constexpr uint32_t kMagic = 0x4B565353;  // "KVSS"
-constexpr uint32_t kVersion = 2;         // bumped for TTL support
-
-}  // namespace
+using namespace kvstore::util;
 
 Snapshot::Snapshot(const std::filesystem::path& path) : path_(path) {}
 
@@ -95,7 +36,7 @@ void Snapshot::save(const EntryIterator& iterate) {
             write_string(out, key);
             write_string(out, value);
             uint8_t has_expiration = expires_at.has_value() ? 1 : 0;
-            out.write(reinterpret_cast<const char*>(&has_expiration), sizeof(has_expiration));
+            write_uint8(out, has_expiration);
             if (expires_at.has_value()) {
                 write_int64(out, expires_at.value());
             }
@@ -148,8 +89,7 @@ void Snapshot::load(
         if (!read_string(in, key) || !read_string(in, value)) {
             throw std::runtime_error("corrupted snapshot file");
         }
-        uint8_t has_expiration = 0;
-        in.read(reinterpret_cast<char*>(&has_expiration), sizeof(has_expiration));
+        uint8_t has_expiration = read_uint8(in);
         if (!in.good()) {
             throw std::runtime_error("corrupted snapshot file");
         }
