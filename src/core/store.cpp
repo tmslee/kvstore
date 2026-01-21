@@ -126,17 +126,17 @@ class Store::Impl {
         return true;
     }
 
-    [[nodiscard]] std::size_t size() const noexcept {
+    [[nodiscard]] std::size_t size() const {
         std::shared_lock lock(mutex_);
         return data_.size();
     }
 
-    [[nodiscard]] bool empty() const noexcept {
+    [[nodiscard]] bool empty() const {
         std::shared_lock lock(mutex_);
         return data_.empty();
     }
 
-    void clear() noexcept {
+    void clear() {
         bool should_snapshot = false;
         {
             std::unique_lock lock(mutex_);

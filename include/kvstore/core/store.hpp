@@ -68,11 +68,11 @@ class Store : public IStore {
     */
 
     [[nodiscard]] bool contains(std::string_view key) override;
-    [[nodiscard]] std::size_t size() const noexcept override;
-    [[nodiscard]] bool empty() const noexcept override;
+    [[nodiscard]] std::size_t size() const override;
+    [[nodiscard]] bool empty() const override;
 
-    void clear() noexcept override;
-    
+    void clear() override;
+
     void snapshot();
     void cleanup_expired();
 
