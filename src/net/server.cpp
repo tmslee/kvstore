@@ -14,12 +14,13 @@
 #include <vector>
 
 #include "kvstore/net/protocol.hpp"
+#include "kvstore/util/types.hpp"
 
 namespace kvstore::net {
 
 class Server::Impl {
    public:
-    Impl(core::Store& store, const ServerOptions& options) : store_(store), options_(options) {}
+    Impl(core::IStore& store, const ServerOptions& options) : store_(store), options_(options) {}
 
     ~Impl() {
         // destructor should NOT throw.
@@ -303,7 +304,7 @@ class Server::Impl {
         return Protocol::error("unkown command: " + cmd.command);
     }
 
-    core::Store& store_;
+    core::IStore& store_;
     ServerOptions options_;
 
     std::atomic<int> server_fd_ = -1;
@@ -317,7 +318,7 @@ class Server::Impl {
 };
 
 // PIMPL INTERFACE -------------------------------------------------------------------------------
-Server::Server(core::Store& store, const ServerOptions& options)
+Server::Server(core::IStore& store, const ServerOptions& options)
     : impl_(std::make_unique<Impl>(store, options)) {}
 Server::~Server() = default;
 Server::Server(Server&&) noexcept = default;

@@ -142,12 +142,12 @@ class DiskStore::Impl {
         return true;
     }
 
-    [[nodiscard]] std::size_t size() const noexcept {
+    [[nodiscard]] std::size_t size() const {
         std::shared_lock lock(mutex_);
         return entry_count_;
     }
 
-    [[nodiscard]] bool empty() const noexcept {
+    [[nodiscard]] bool empty() const {
         std::shared_lock lock(mutex_);
         return entry_count_ == 0;
     }
@@ -398,10 +398,10 @@ bool DiskStore::remove(std::string_view key) {
 bool DiskStore::contains(std::string_view key) {
     return impl_->contains(key);
 }
-std::size_t DiskStore::size() const noexcept {
+std::size_t DiskStore::size() const {
     return impl_->size();
 }
-bool DiskStore::empty() const noexcept {
+bool DiskStore::empty() const {
     return impl_->empty();
 }
 void DiskStore::clear() {

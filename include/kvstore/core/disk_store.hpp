@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 
+#include "kvstore/core/istore.hpp"
 #include "kvstore/util/clock.hpp"
 #include "kvstore/util/types.hpp"
 
@@ -19,7 +20,7 @@ struct DiskStoreOptions {
     std::shared_ptr<util::Clock> clock = std::make_shared<util::SystemClock>();
 };
 
-class DiskStore {
+class DiskStore : public IStore {
    public:
     explicit DiskStore(const DiskStoreOptions& options);
     ~DiskStore();
@@ -29,16 +30,16 @@ class DiskStore {
     DiskStore(DiskStore&&) noexcept;
     DiskStore& operator=(DiskStore&&) noexcept;
 
-    void put(std::string_view key, std::string_view value);
-    void put(std::string_view key, std::string_view value, util::Duration ttl);
+    void put(std::string_view key, std::string_view value) override;
+    void put(std::string_view key, std::string_view value, util::Duration ttl) override;
 
-    [[nodiscard]] std::optional<std::string> get(std::string_view key);
-    [[nodiscard]] bool remove(std::string_view key);
-    [[nodiscard]] bool contains(std::string_view key);
-    [[nodiscard]] std::size_t size() const noexcept;
-    [[nodiscard]] bool empty() const noexcept;
+    [[nodiscard]] std::optional<std::string> get(std::string_view key) override;
+    [[nodiscard]] bool remove(std::string_view key) override;
+    [[nodiscard]] bool contains(std::string_view key) override;
+    [[nodiscard]] std::size_t size() const override;
+    [[nodiscard]] bool empty() const override;
 
-    void clear();
+    void clear() override;
     void compact();
 
    private:

@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-#include "kvstore/core/store.hpp"
+#include "kvstore/core/istore.hpp"
 
 namespace kvstore::net {
 
@@ -16,7 +16,7 @@ struct ServerOptions {
 
 class Server {
    public:
-    Server(core::Store& store, const ServerOptions& options = {});
+    Server(core::IStore& store, const ServerOptions& options = {});
     ~Server();
     /*
         note on copy&moves:
