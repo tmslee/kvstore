@@ -1,17 +1,18 @@
 #include "kvstore/core/disk_store.hpp"
-#include "kvstore/util/clock.hpp"
-#include "kvstore/util/types.hpp"
 
 #include <gtest/gtest.h>
 
 #include <filesystem>
+
+#include "kvstore/util/clock.hpp"
+#include "kvstore/util/types.hpp"
 
 namespace kvstore::core::test {
 
 namespace util = kvstore::util;
 
 class DiskStoreTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {
         test_dir_ = std::filesystem::temp_directory_path() / "disk_store_test";
         std::filesystem::remove_all(test_dir_);
@@ -31,11 +32,11 @@ protected:
     std::unique_ptr<DiskStore> store_;
 };
 
-TEST_F(DiskStoreTest, InitiallyEmpty){
+TEST_F(DiskStoreTest, InitiallyEmpty) {
     EXPECT_TRUE(store_->empty());
     EXPECT_EQ(store_->size(), 0);
 }
-TEST_F(DiskStoreTest, PutAndGet){
+TEST_F(DiskStoreTest, PutAndGet) {
     store_->put("key1", "value1");
 
     auto result = store_->get("key1");
@@ -43,12 +44,12 @@ TEST_F(DiskStoreTest, PutAndGet){
     EXPECT_EQ(*result, "value1");
 }
 
-TEST_F(DiskStoreTest, GetMissingKey){
+TEST_F(DiskStoreTest, GetMissingKey) {
     auto result = store_->get("nonexistent");
     EXPECT_FALSE(result.has_value());
 }
 
-TEST_F(DiskStoreTest, PutOverwrites){
+TEST_F(DiskStoreTest, PutOverwrites) {
     store_->put("key1", "value1");
     store_->put("key1", "value2");
 
@@ -57,14 +58,14 @@ TEST_F(DiskStoreTest, PutOverwrites){
     EXPECT_EQ(*result, "value2");
 }
 
-TEST_F(DiskStoreTest, Contains){
+TEST_F(DiskStoreTest, Contains) {
     EXPECT_FALSE(store_->contains("key1"));
 
     store_->put("key1", "value1");
     EXPECT_TRUE(store_->contains("key1"));
 }
 
-TEST_F(DiskStoreTest, Remove){
+TEST_F(DiskStoreTest, Remove) {
     store_->put("key1", "value1");
 
     EXPECT_TRUE(store_->remove("key1"));
@@ -72,7 +73,7 @@ TEST_F(DiskStoreTest, Remove){
     EXPECT_FALSE(store_->remove("key1"));
 }
 
-TEST_F(DiskStoreTest, Clear){
+TEST_F(DiskStoreTest, Clear) {
     store_->put("key1", "value1");
     store_->put("key2", "value2");
     store_->put("key3", "value3");
@@ -84,7 +85,7 @@ TEST_F(DiskStoreTest, Clear){
     EXPECT_FALSE(store_->contains("key1"));
 }
 
-TEST_F(DiskStoreTest, Size){
+TEST_F(DiskStoreTest, Size) {
     EXPECT_EQ(store_->size(), 0);
 
     store_->put("key1", "value1");
@@ -100,7 +101,7 @@ TEST_F(DiskStoreTest, Size){
     EXPECT_EQ(store_->size(), 1);
 }
 
-TEST_F(DiskStoreTest, PersistsAcrossRestarts){
+TEST_F(DiskStoreTest, PersistsAcrossRestarts) {
     store_->put("key1", "value1");
     store_->put("key2", "value2");
 
@@ -119,10 +120,10 @@ TEST_F(DiskStoreTest, PersistsAcrossRestarts){
     EXPECT_EQ(*result2, "value2");
 }
 
-TEST_F(DiskStoreTest, PersistsRemove){
+TEST_F(DiskStoreTest, PersistsRemove) {
     store_->put("key1", "value1");
     store_->put("key2", "value2");
-    (void) store_->remove("key1");
+    (void)store_->remove("key1");
 
     store_.reset();
 
@@ -134,8 +135,8 @@ TEST_F(DiskStoreTest, PersistsRemove){
     EXPECT_TRUE(store_->contains("key2"));
 }
 
-TEST_F(DiskStoreTest, PersistsOverwrite){
-        store_->put("key1", "value1");
+TEST_F(DiskStoreTest, PersistsOverwrite) {
+    store_->put("key1", "value1");
     store_->put("key1", "value2");
     store_->put("key1", "value3");
 
@@ -150,7 +151,7 @@ TEST_F(DiskStoreTest, PersistsOverwrite){
     EXPECT_EQ(*result, "value3");
 }
 
-TEST_F(DiskStoreTest, LargeValues){
+TEST_F(DiskStoreTest, LargeValues) {
     std::string large_value(100000, 'x');
     store_->put("large", large_value);
 
@@ -159,7 +160,7 @@ TEST_F(DiskStoreTest, LargeValues){
     EXPECT_EQ(*result, large_value);
 }
 
-TEST_F(DiskStoreTest, ManyKeys){
+TEST_F(DiskStoreTest, ManyKeys) {
     for (int i = 0; i < 1000; ++i) {
         store_->put("key" + std::to_string(i), "value" + std::to_string(i));
     }
@@ -173,7 +174,7 @@ TEST_F(DiskStoreTest, ManyKeys){
     }
 }
 
-TEST_F(DiskStoreTest, Compaction){
+TEST_F(DiskStoreTest, Compaction) {
     DiskStoreOptions opts;
     opts.data_dir = test_dir_;
     opts.compaction_threshold = 10;
@@ -195,7 +196,7 @@ TEST_F(DiskStoreTest, Compaction){
 }
 
 class DiskStoreTTLTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {
         test_dir_ = std::filesystem::temp_directory_path() / "disk_store_ttl_test";
         std::filesystem::remove_all(test_dir_);
@@ -277,4 +278,4 @@ TEST_F(DiskStoreTTLTest, ExpiredKeysRemovedDuringCompaction) {
     EXPECT_TRUE(store_->contains("permanent"));
 }
 
-}
+}  // namespace kvstore::core::test

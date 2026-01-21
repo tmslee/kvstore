@@ -53,14 +53,14 @@ class Store::Impl {
             if (wal_) {
                 wal_->log_put(key, value);
                 ++wal_entries_since_snapshot_;
-                should_snapshot = snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
+                should_snapshot =
+                    snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
             }
             data_[std::string(key)] = Entry{std::string(value), std::nullopt};
         }
-        if(should_snapshot) {
+        if (should_snapshot) {
             try_auto_snapshot();
         }
-        
     }
 
     void put(std::string_view key, std::string_view value, util::Duration ttl) {
@@ -71,12 +71,12 @@ class Store::Impl {
             if (wal_) {
                 wal_->log_put_with_ttl(key, value, util::to_epoch_ms(expires_at));
                 ++wal_entries_since_snapshot_;
-                should_snapshot = snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
-
+                should_snapshot =
+                    snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
             }
             data_[std::string(key)] = Entry{std::string(value), expires_at};
         }
-        if(should_snapshot) {
+        if (should_snapshot) {
             try_auto_snapshot();
         }
     }
@@ -102,12 +102,12 @@ class Store::Impl {
             if (wal_) {
                 wal_->log_remove(key);
                 ++wal_entries_since_snapshot_;
-                should_snapshot = snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
-
+                should_snapshot =
+                    snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
             }
             removed = data_.erase(std::string(key)) > 0;
         }
-        if(should_snapshot) {
+        if (should_snapshot) {
             try_auto_snapshot();
         }
         return removed;
@@ -143,15 +143,14 @@ class Store::Impl {
             if (wal_) {
                 wal_->log_clear();
                 ++wal_entries_since_snapshot_;
-                should_snapshot = snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
-
+                should_snapshot =
+                    snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
             }
             data_.clear();
         }
-        if(should_snapshot) {
+        if (should_snapshot) {
             try_auto_snapshot();
         }
-        
     }
 
     void snapshot() {
@@ -203,10 +202,11 @@ class Store::Impl {
         });
     }
 
-    // try_auto_snapshot does another state check under a lock to ensure no double snapshotting across threads
+    // try_auto_snapshot does another state check under a lock to ensure no double snapshotting
+    // across threads
     void try_auto_snapshot() {
         std::unique_lock lock(mutex_);
-        if(snapshot_ && wal_entries_since_snapshot_ >= options_.snapshot_threshold) {
+        if (snapshot_ && wal_entries_since_snapshot_ >= options_.snapshot_threshold) {
             do_snapshot();
         }
     }
@@ -244,7 +244,7 @@ class Store::Impl {
     std::size_t wal_entries_since_snapshot_ = 0;
 };
 
-//PIMPL INTERFACE --------------------------------------------------------------------
+// PIMPL INTERFACE --------------------------------------------------------------------
 Store::Store() : impl_(std::make_unique<Impl>()) {}
 Store::Store(const StoreOptions& options) : impl_(std::make_unique<Impl>(options)) {}
 Store::~Store() = default;

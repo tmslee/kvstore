@@ -127,7 +127,8 @@ bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& 
 }
 
 void WriteAheadLog::replay(
-    std::function<void(EntryType, std::string_view, std::string_view, util::ExpirationTime)> callback) {
+    std::function<void(EntryType, std::string_view, std::string_view, util::ExpirationTime)>
+        callback) {
     std::lock_guard lock(mutex_);
 
     std::ifstream in(path_, std::ios::binary);

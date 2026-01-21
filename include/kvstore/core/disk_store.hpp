@@ -1,9 +1,6 @@
 #ifndef KVSTORE_CORE_DISK_STORE_HPP
 #define KVSTORE_CORE_DISK_STORE_HPP
 
-#include "kvstore/util/clock.hpp"
-#include "kvstore/util/types.hpp"
-
 #include <cstddef>
 #include <filesystem>
 #include <memory>
@@ -11,16 +8,19 @@
 #include <string>
 #include <string_view>
 
+#include "kvstore/util/clock.hpp"
+#include "kvstore/util/types.hpp"
+
 namespace kvstore::core {
 
 struct DiskStoreOptions {
     std::filesystem::path data_dir;
-    std::size_t compaction_threshold = 1000; //compact after N tombstones
+    std::size_t compaction_threshold = 1000;  // compact after N tombstones
     std::shared_ptr<util::Clock> clock = std::make_shared<util::SystemClock>();
 };
 
 class DiskStore {
-public:
+   public:
     explicit DiskStore(const DiskStoreOptions& options);
     ~DiskStore();
 
@@ -41,11 +41,11 @@ public:
     void clear();
     void compact();
 
-private:
+   private:
     class Impl;
     std::unique_ptr<Impl> impl_;
 };
 
-} //namespace kvstore::core
+}  // namespace kvstore::core
 
 #endif
