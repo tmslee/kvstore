@@ -7,29 +7,20 @@
 
 #include "kvstore/core/snapshot.hpp"
 #include "kvstore/core/wal.hpp"
+#include "kvstore/util/types.hpp"
 
 namespace kvstore::core {
 
-namespace {
-int64_t to_epoch_ms(util::TimePoint tp) {
-    auto duration = tp.time_since_epoch();
-    return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-}
-
-util::TimePoint from_epoch_ms(int64_t ms) {
-    return util::TimePoint(std::chrono::milliseconds(ms));
-}
-
-}  // namespace
+using namespace kvstore::util;
 
 struct Entry {
     std::string value;
-    std::optional<util::TimePoint> expires_at = std::nullopt;
+    std::optional<TimePoint> expires_at = std::nullopt;
 };
 
 class Store::Impl {
    public:
-    Impl() : clock_(std::make_shared<util::SystemClock>()) {}
+    Impl() : clock_(std::make_shared<SystemClock>()) {}
 
     explicit Impl(const StoreOptions& options) : options_(options), clock_(options.clock) {
         // IMPORTANT: load snapshot first THEN WAL
@@ -38,7 +29,7 @@ class Store::Impl {
             if (snapshot_->exists()) {
                 snapshot_->load([this](std::string_view key, std::string_view value,
                                        ExpirationTime expires_at_ms) {
-                    std::optional<util::TimePoint> expires_at = std::nullopt;
+                    std::optional<TimePoint> expires_at = std::nullopt;
                     if (expires_at_ms.has_value()) {
                         expires_at = from_epoch_ms(expires_at_ms.value());
                     }
@@ -65,7 +56,7 @@ class Store::Impl {
         data_[std::string(key)] = Entry{std::string(value), std::nullopt};
     }
 
-    void put(std::string_view key, std::string_view value, util::Duration ttl) {
+    void put(std::string_view key, std::string_view value, Duration ttl) {
         std::unique_lock lock(mutex_);
         auto expires_at = clock_->now() + ttl;
         if (wal_) {
@@ -212,7 +203,7 @@ class Store::Impl {
     }
 
     StoreOptions options_;
-    std::shared_ptr<util::Clock> clock_;
+    std::shared_ptr<Clock> clock_;
     mutable std::shared_mutex mutex_;
     std::unordered_map<std::string, Entry> data_;
     std::unique_ptr<WriteAheadLog> wal_;
@@ -234,7 +225,7 @@ void Store::put(std::string_view key, std::string_view value) {
     impl_->put(key, value);
 }
 
-void Store::put(std::string_view key, std::string_view value, util::Duration ttl) {
+void Store::put(std::string_view key, std::string_view value, Duration ttl) {
     impl_->put(key, value, ttl);
 }
 std::optional<std::string> Store::get(std::string_view key) {
