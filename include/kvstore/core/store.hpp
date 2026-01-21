@@ -9,6 +9,7 @@
 #include <string_view>
 
 #include "kvstore/util/clock.hpp"
+#include "kvstore/util/types.hpp"
 
 namespace kvstore::core {
 

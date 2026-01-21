@@ -1,13 +1,11 @@
 #ifndef KVSTORE_UTIL_CLOCK_HPP
 #define KVSTORE_UTIL_CLOCK_HPP
 
-#include <chrono>
 #include <memory>
 
-namespace kvstore::util {
+#include "kvstore/util/types.hpp"
 
-using TimePoint = std::chrono::steady_clock::time_point;
-using Duration = std::chrono::milliseconds;
+namespace kvstore::util {
 
 class Clock {
    public:

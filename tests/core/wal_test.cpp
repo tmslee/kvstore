@@ -6,6 +6,9 @@
 #include <vector>
 
 namespace kvstore::core::test {
+
+using util::ExpirationTime;
+
 class WALTest : public ::testing::Test {
    protected:
     void SetUp() override {

@@ -6,8 +6,11 @@
 #include <unordered_map>
 
 #include "kvstore/core/store.hpp"
+#include "kvstore/util/types.hpp"
 
 namespace kvstore::core::test {
+
+using util::ExpirationTime;
 
 class SnapshotTest : public ::testing::Test {
    protected:
@@ -36,7 +39,7 @@ TEST_F(SnapshotTest, SaveAndLoad) {
             {"key3", "value3"},
         };
 
-        snap.save([&data](core::EntryEmitter emit) {
+        snap.save([&data](EntryEmitter emit) {
             for (const auto& [k, v] : data) {
                 emit(k, v, std::nullopt);
             }
