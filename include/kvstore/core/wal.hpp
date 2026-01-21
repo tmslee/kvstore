@@ -1,8 +1,6 @@
 #ifndef KVSTORE_CORE_WAL_HPP
 #define KVSTORE_CORE_WAL_HPP
 
-#include "kvstore/util/types.hpp"
-
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -11,6 +9,8 @@
 #include <optional>
 #include <string>
 #include <string_view>
+
+#include "kvstore/util/types.hpp"
 
 namespace kvstore::core {
 
@@ -45,8 +45,9 @@ class WriteAheadLog {
             void replay(F&& callback);
     */
     // for recovery (called once at startup) std::function is fine and keeps interface simple
-    void replay(std::function<void(EntryType, std::string_view, std::string_view, util::ExpirationTime)>
-                    callback);
+    void replay(
+        std::function<void(EntryType, std::string_view, std::string_view, util::ExpirationTime)>
+            callback);
 
     void sync();
     void truncate();
@@ -64,8 +65,8 @@ class WriteAheadLog {
     [[nodiscard]] bool read_entry(std::ifstream& in, EntryType& type, std::string& key,
                                   std::string& value, util::ExpirationTime& expires_at);
 
-    static constexpr uint32_t kMagic = 0x4B56574C // "KVWL"
-    static constexpr uint32_t KVersion = 1;
+    static constexpr uint32_t kMagic = 0x4B56574C;  // "KVWL"
+    static constexpr uint32_t kVersion = 1;
 
     std::filesystem::path path_;
     std::ofstream out_;

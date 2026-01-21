@@ -1,8 +1,9 @@
 #ifndef KVSTORE_UTIL_CLOCK_HPP
 #define KVSTORE_UTIL_CLOCK_HPP
 
-#include "kvstore/util/types.hpp"
 #include <memory>
+
+#include "kvstore/util/types.hpp"
 
 namespace kvstore::util {
 

@@ -1,14 +1,14 @@
 #ifndef KVSTORE_CORE_SNAPSHOT_HPP
 #define KVSTORE_CORE_SNAPSHOT_HPP
 
-#include "kvstore/util/types.hpp"
-
 #include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
+
+#include "kvstore/util/types.hpp"
 
 namespace kvstore::core {
 
@@ -42,16 +42,17 @@ class Snapshot {
             - debugging - stack traces through lambdas are ugly
     */
     void save(const EntryIterator& iterate);
-    void load(std::function<void(std::string_view, std::string_view, util::ExpirationTime)> callback);
+    void load(
+        std::function<void(std::string_view, std::string_view, util::ExpirationTime)> callback);
 
     [[nodiscard]] bool exists() const;
     [[nodiscard]] std::filesystem::path path() const;
     [[nodiscard]] std::size_t entry_count() const;
 
    private:
-    static constexpr uint32_t kMagic = 0x4B565353; //"KVSS"
+    static constexpr uint32_t kMagic = 0x4B565353;  //"KVSS"
     static constexpr uint32_t kVersion = 2;
-    
+
     std::filesystem::path path_;
     std::size_t entry_count_ = 0;
 };

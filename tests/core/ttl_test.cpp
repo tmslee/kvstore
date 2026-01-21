@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <filesystem>
+
 #include "kvstore/core/store.hpp"
 #include "kvstore/util/clock.hpp"
 #include "kvstore/util/types.hpp"
-
-#include <filesystem>
 
 namespace kvstore::core::test {
 

@@ -1,7 +1,8 @@
 #include "kvstore/core/wal.hpp"
-#include "kvstore/util/binary_io.hpp"
 
 #include <stdexcept>
+
+#include "kvstore/util/binary_io.hpp"
 
 namespace kvstore::core {
 
@@ -10,13 +11,15 @@ using namespace kvstore::util;
 // note: std::ios::binary | std::ios::app are both binary flags and are being OR'ed
 // binary: dont translate newlines, write raw bytes exactly as given
 // app: append mmode
-WriteAheadLog::WriteAheadLog(const std::filesystem::path& path)
-    : path_(path), out_(path, std::ios::binary | std::ios::app) {
+WriteAheadLog::WriteAheadLog(const std::filesystem::path& path) : path_(path) {
+    bool file_exists = std::filesystem::exists(path_);
+    out_.open(path_, std::ios::binary | std::ios::app);
+
     if (!out_.is_open()) {
         throw std::runtime_error("failed to open WAL file: " + path.string());
     }
 
-    if(!file_exists || std::filesystem::file_size(path_) == 0) {
+    if (!file_exists || std::filesystem::file_size(path_) == 0) {
         write_header();
     }
 }
@@ -47,12 +50,12 @@ void WriteAheadLog::write_header() {
 
 bool WriteAheadLog::validate_header(std::ifstream& in) {
     uint32_t magic = read_uint32(in);
-    if(!in.good() || magic != kMagic) {
+    if (!in.good() || magic != kMagic) {
         return false;
     }
 
     uint32_t version = read_uint32(in);
-    if(!in.good() || version != kVersion) {
+    if (!in.good() || version != kVersion) {
         return false;
     }
 
@@ -132,7 +135,7 @@ void WriteAheadLog::replay(
         return;
     }
 
-    if(!validate_header(in)) {
+    if (!validate_header(in)) {
         throw std::runtime_error("Invalid WAL file: bad header");
     }
 

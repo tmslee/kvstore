@@ -1,8 +1,9 @@
 #include "kvstore/core/snapshot.hpp"
-#include "kvstore/util/binary_io.hpp"
 
 #include <fstream>
 #include <stdexcept>
+
+#include "kvstore/util/binary_io.hpp"
 
 namespace kvstore::core {
 

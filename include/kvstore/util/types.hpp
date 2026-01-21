@@ -2,7 +2,7 @@
 #define KVSTORE_UTIL_TYPES_HPP
 
 #include <chrono>
-#include <cstint>
+#include <cstdint>
 #include <optional>
 
 namespace kvstore::util {
@@ -20,6 +20,6 @@ inline TimePoint from_epoch_ms(int64_t ms) {
     return TimePoint(std::chrono::milliseconds(ms));
 }
 
-} //namespace kvstore::util
+}  // namespace kvstore::util
 
 #endif
