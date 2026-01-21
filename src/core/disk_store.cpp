@@ -57,7 +57,10 @@ public:
         }
     }
 
-    void put(std::string_view key, std::string_view value) {}
+    void put(std::string_view key, std::string_view value) {
+        std::unique_lock lock(mutex_);
+        append_entrY(key)
+    }
     void put(std::string_view key, std::string_view value, util::Duration ttl) {}
     [[nodiscard]] std::optional<std::string> get(std::string_view key) {}
     [[nodiscard]] bool remove(std::string_view key) {}

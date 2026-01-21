@@ -47,24 +47,38 @@ class Store::Impl {
     }
 
     void put(std::string_view key, std::string_view value) {
-        std::unique_lock lock(mutex_);
-        if (wal_) {
-            wal_->log_put(key, value);
-            ++wal_entries_since_snapshot_;
-            maybe_snapshot();
+        bool should_snapshot = false;
+        {
+            std::unique_lock lock(mutex_);
+            if (wal_) {
+                wal_->log_put(key, value);
+                ++wal_entries_since_snapshot_;
+                should_snapshot = snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
+            }
+            data_[std::string(key)] = Entry{std::string(value), std::nullopt};
         }
-        data_[std::string(key)] = Entry{std::string(value), std::nullopt};
+        if(should_snapshot) {
+            try_auto_snapshot();
+        }
+        
     }
 
     void put(std::string_view key, std::string_view value, Duration ttl) {
-        std::unique_lock lock(mutex_);
-        auto expires_at = clock_->now() + ttl;
-        if (wal_) {
-            wal_->log_put_with_ttl(key, value, to_epoch_ms(expires_at));
-            ++wal_entries_since_snapshot_;
-            maybe_snapshot();
+        bool should_snapshot = false;
+        {
+            std::unique_lock lock(mutex_);
+            auto expires_at = clock_->now() + ttl;
+            if (wal_) {
+                wal_->log_put_with_ttl(key, value, to_epoch_ms(expires_at));
+                ++wal_entries_since_snapshot_;
+                should_snapshot = snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
+
+            }
+            data_[std::string(key)] = Entry{std::string(value), expires_at};
         }
-        data_[std::string(key)] = Entry{std::string(value), expires_at};
+        if(should_snapshot) {
+            try_auto_snapshot();
+        }
     }
 
     [[nodiscard]] std::optional<std::string> get(std::string_view key) {
@@ -81,13 +95,22 @@ class Store::Impl {
     }
 
     [[nodiscard]] bool remove(std::string_view key) {
-        std::unique_lock lock(mutex_);
-        if (wal_) {
-            wal_->log_remove(key);
-            ++wal_entries_since_snapshot_;
-            maybe_snapshot();
+        bool should_snapshot = false;
+        bool removed = false;
+        {
+            std::unique_lock lock(mutex_);
+            if (wal_) {
+                wal_->log_remove(key);
+                ++wal_entries_since_snapshot_;
+                should_snapshot = snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
+
+            }
+            removed = data_.erase(std::string(key)) > 0;
         }
-        return data_.erase(std::string(key)) > 0;
+        if(should_snapshot) {
+            try_auto_snapshot();
+        }
+        return removed;
     }
 
     [[nodiscard]] bool contains(std::string_view key) {
@@ -114,13 +137,21 @@ class Store::Impl {
     }
 
     void clear() noexcept {
-        std::unique_lock lock(mutex_);
-        if (wal_) {
-            wal_->log_clear();
-            ++wal_entries_since_snapshot_;
-            maybe_snapshot();
+        bool should_snapshot = false;
+        {
+            std::unique_lock lock(mutex_);
+            if (wal_) {
+                wal_->log_clear();
+                ++wal_entries_since_snapshot_;
+                should_snapshot = snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
+
+            }
+            data_.clear();
         }
-        data_.clear();
+        if(should_snapshot) {
+            try_auto_snapshot();
+        }
+        
     }
 
     void snapshot() {
@@ -172,8 +203,10 @@ class Store::Impl {
         });
     }
 
-    void maybe_snapshot() {
-        if (snapshot_ && wal_entries_since_snapshot_ >= options_.snapshot_threshold) {
+    // try_auto_snapshot does another state check under a lock to ensure no double snapshotting across threads
+    void try_auto_snapshot() {
+        std::unique_lock lock(mutex_);
+        if(snapshot_ && wal_entries_since_snapshot_ >= options_.snapshot_threshold) {
             do_snapshot();
         }
     }
