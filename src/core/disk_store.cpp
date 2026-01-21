@@ -74,7 +74,7 @@ public:
         {
             std::unique_lock lock(mutex_);
             auto expires_at = clock_->now() + ttl;
-            append_entry(key, value, std::nullopt, util::to_epoch_ms(expires_at), false);
+            append_entry(key, value, util::to_epoch_ms(expires_at), false);
             should_compact = (tombstone_count_ >= options_.compaction_threshold); 
         }
         if(should_compact) {
@@ -86,7 +86,7 @@ public:
         std::unique_lock lock(mutex_);
         
         auto it = index_.find(std::string(key));
-        if(it == index.end()) {
+        if(it == index_.end()) {
             return std::nullopt;
         }
 
@@ -172,7 +172,7 @@ private:
     void load_index() {
         data_file_.seekg(0);
         
-        uint32_t magic = util::read_uint32(data_file_)l
+        uint32_t magic = util::read_uint32(data_file_);
         if(magic != kMagic) {
             throw std::runtime_error("invalid data file: bad magic");
         }
@@ -186,7 +186,7 @@ private:
             uint64_t offset = data_file_.tellg();
             
             uint8_t entry_type = util::read_uint8(data_file_);
-            if(!data_file_.food()) {
+            if(!data_file_.good()) {
                 break;
             }
 
@@ -225,7 +225,7 @@ private:
                 ++tombstone_count_;
             } else {
                 IndexEntry entry{offset, static_cast<uint32_t>(value.size()), expires_at, false};
-                auto it = index_.find(key)l
+                auto it = index_.find(key);
                 if(it != index_.end()) {
                     it->second = entry;
                 } else {
@@ -243,12 +243,12 @@ private:
         uint64_t offset = data_file_.tellp();
 
         uint8_t entry_type = is_tombstone ? kEntryTombstone : kEntryRegular;
-        util::write_uint8(data_file, entry_type);
+        util::write_uint8(data_file_, entry_type);
         util::write_string(data_file_, key);
         util::write_string(data_file_, value);
 
         uint8_t has_expiration = expires_at_ms.has_value() ? 1 : 0;
-        util::write_uint8(data_file, has_expiration);
+        util::write_uint8(data_file_, has_expiration);
         if(expires_at_ms.has_value()) {
             util::write_int64(data_file_, expires_at_ms.value());
         }
@@ -315,7 +315,7 @@ private:
                 throw std::runtime_error("failed to open temp file for compaction");
             }
             util::write_uint32(temp_file, kMagic);
-            util::write_uint32(temp_file, kVerison);
+            util::write_uint32(temp_file, kVersion);
 
             std::unordered_map<std::string, IndexEntry> new_index;
 
@@ -329,7 +329,7 @@ private:
                 std::string value = read_value(entry);
                 
                 util::write_uint8(temp_file, kEntryRegular);
-                utiL::write_string(temp_file, key);
+                util::write_string(temp_file, key);
                 util::write_string(temp_file, value);
 
                 uint8_t has_expiration = entry.expires_at.has_value() ? 1 : 0;
@@ -340,7 +340,7 @@ private:
 
                 new_index[key] = IndexEntry{
                     new_offset,
-                    static_cast<uint32_t>(value.size());
+                    static_cast<uint32_t>(value.size()),
                     entry.expires_at,
                     false
                 };

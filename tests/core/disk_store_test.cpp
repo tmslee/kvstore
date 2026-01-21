@@ -13,11 +13,11 @@ namespace util = kvstore::util;
 class DiskStoreTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        test_dir_ = std::filesystem::temp_directorY_path() / "disk_store_test";
+        test_dir_ = std::filesystem::temp_directory_path() / "disk_store_test";
         std::filesystem::remove_all(test_dir_);
         std::filesystem::create_directories(test_dir_);
 
-        DiskStoreOPtions opts;
+        DiskStoreOptions opts;
         opts.data_dir = test_dir_;
         store_ = std::make_unique<DiskStore>(opts);
     }
@@ -29,7 +29,7 @@ protected:
 
     std::filesystem::path test_dir_;
     std::unique_ptr<DiskStore> store_;
-}
+};
 
 TEST_F(DiskStoreTest, InitiallyEmpty){
     EXPECT_TRUE(store_->empty());
@@ -96,7 +96,7 @@ TEST_F(DiskStoreTest, Size){
     store_->put("key1", "newvalue");
     EXPECT_EQ(store_->size(), 2);
 
-    store_->remove("key1");
+    (void)store_->remove("key1");
     EXPECT_EQ(store_->size(), 1);
 }
 
@@ -122,7 +122,7 @@ TEST_F(DiskStoreTest, PersistsAcrossRestarts){
 TEST_F(DiskStoreTest, PersistsRemove){
     store_->put("key1", "value1");
     store_->put("key2", "value2");
-    store_->remove("key1");
+    (void) store_->remove("key1");
 
     store_.reset();
 
@@ -185,7 +185,7 @@ TEST_F(DiskStoreTest, Compaction){
 
     for (int i = 0; i < 15; ++i) {
         store_->put("temp" + std::to_string(i), "value");
-        store_->remove("temp" + std::to_string(i));
+        (void)store_->remove("temp" + std::to_string(i));
     }
 
     // After enough tombstones, compaction should happen
@@ -217,28 +217,28 @@ protected:
     std::filesystem::path test_dir_;
     std::shared_ptr<util::MockClock> clock_;
     std::unique_ptr<DiskStore> store_;
-}
+};
 
 TEST_F(DiskStoreTTLTest, KeyExpiresAfterTTL) {
-    store_->put("key1", "value1", Duration(1000));
+    store_->put("key1", "value1", util::Duration(1000));
 
     auto result = store_->get("key1");
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(*result, "value1");
 
-    clock_->advance(Duration(1100));
+    clock_->advance(util::Duration(1100));
 
     result = store_->get("key1");
     EXPECT_FALSE(result.has_value());
 }
 
 TEST_F(DiskStoreTTLTest, TTLPersistsAcrossRestart) {
-    store_->put("key1", "value1", Duration(10000));
+    store_->put("key1", "value1", util::Duration(10000));
     store_->put("key2", "value2");
 
     store_.reset();
 
-    clock_->advance(Duration(5000));
+    clock_->advance(util::Duration(5000));
 
     DiskStoreOptions opts;
     opts.data_dir = test_dir_;
@@ -248,7 +248,7 @@ TEST_F(DiskStoreTTLTest, TTLPersistsAcrossRestart) {
     EXPECT_TRUE(store_->contains("key1"));
     EXPECT_TRUE(store_->contains("key2"));
 
-    clock_->advance(Duration(6000));
+    clock_->advance(util::Duration(6000));
 
     EXPECT_FALSE(store_->contains("key1"));
     EXPECT_TRUE(store_->contains("key2"));
@@ -261,15 +261,15 @@ TEST_F(DiskStoreTTLTest, ExpiredKeysRemovedDuringCompaction) {
     opts.compaction_threshold = 5;
     store_ = std::make_unique<DiskStore>(opts);
 
-    store_->put("expiring", "value", Duration(1000));
+    store_->put("expiring", "value", util::Duration(1000));
     store_->put("permanent", "value");
 
-    clock_->advance(Duration(2000));
+    clock_->advance(util::Duration(2000));
 
     // Trigger compaction
     for (int i = 0; i < 10; ++i) {
         store_->put("temp" + std::to_string(i), "value");
-        store_->remove("temp" + std::to_string(i));
+        (void)store_->remove("temp" + std::to_string(i));
     }
 
     // After compaction, expired key should be gone

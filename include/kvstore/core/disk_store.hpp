@@ -15,7 +15,7 @@ namespace kvstore::core {
 
 struct DiskStoreOptions {
     std::filesystem::path data_dir;
-    std::size_t compaction_threashold = 1000; //compact after N tombstones
+    std::size_t compaction_threshold = 1000; //compact after N tombstones
     std::shared_ptr<util::Clock> clock = std::make_shared<util::SystemClock>();
 };
 
@@ -25,12 +25,12 @@ public:
     ~DiskStore();
 
     DiskStore(const DiskStore&) = delete;
-    DistStore& operator=(const DiskStore&) = delete;
+    DiskStore& operator=(const DiskStore&) = delete;
     DiskStore(DiskStore&&) noexcept;
     DiskStore& operator=(DiskStore&&) noexcept;
 
     void put(std::string_view key, std::string_view value);
-    void put(std::string_view key, srd::string_view value, util::Duration ttl);
+    void put(std::string_view key, std::string_view value, util::Duration ttl);
 
     [[nodiscard]] std::optional<std::string> get(std::string_view key);
     [[nodiscard]] bool remove(std::string_view key);
@@ -44,7 +44,7 @@ public:
 private:
     class Impl;
     std::unique_ptr<Impl> impl_;
-}
+};
 
 } //namespace kvstore::core
 

@@ -63,13 +63,13 @@ class Store::Impl {
         
     }
 
-    void put(std::string_view key, std::string_view value, Duration ttl) {
+    void put(std::string_view key, std::string_view value, util::Duration ttl) {
         bool should_snapshot = false;
         {
             std::unique_lock lock(mutex_);
             auto expires_at = clock_->now() + ttl;
             if (wal_) {
-                wal_->log_put_with_ttl(key, value, to_epoch_ms(expires_at));
+                wal_->log_put_with_ttl(key, value, util::to_epoch_ms(expires_at));
                 ++wal_entries_since_snapshot_;
                 should_snapshot = snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
 
@@ -221,7 +221,7 @@ class Store::Impl {
                 if (!is_expired(entry)) {
                     util::ExpirationTime expires_at_ms = std::nullopt;
                     if (entry.expires_at.has_value()) {
-                        expires_at_ms = to_epoch_ms(entry.expires_at.value());
+                        expires_at_ms = util::to_epoch_ms(entry.expires_at.value());
                     }
                     emit(key, entry.value, expires_at_ms);
                 }
