@@ -1,15 +1,11 @@
 #ifndef KVSTORE_NET_SERVER_HPP
 #define KVSTORE_NET_SERVER_HPP
 
-#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <thread>
-#include <vector>
 
 #include "kvstore/core/store.hpp"
-#include "kvstore/net/protocol.hpp"
 
 namespace kvstore::net {
 
@@ -22,7 +18,6 @@ class Server {
    public:
     Server(core::Store& store, const ServerOptions& options = {});
     ~Server();
-
     /*
         note on copy&moves:
         - server owns threads, socket fd, and reference to store. copying is nonsensical.
@@ -42,21 +37,8 @@ class Server {
     [[nodiscard]] uint16_t port() const noexcept;
 
    private:
-    void accept_loop();
-    void handle_client(int client_fd);
-    CommandResult process_command(const std::string& line);
-
-    core::Store& store_;
-    ServerOptions options_;
-
-    std::atomic<int> server_fd_ = -1;
-    // server_fd_ needs to be atomic bc it gets written by main thread in stop()
-    // while its read in accept_loop() by another thread.
-    std::atomic<bool> running_ = false;
-
-    std::thread accept_thread_;
-    std::vector<std::thread> client_threads_;
-    std::mutex clients_mutex_;
+    class Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace kvstore::net
