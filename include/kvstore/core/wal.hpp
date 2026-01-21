@@ -1,6 +1,8 @@
 #ifndef KVSTORE_CORE_WAL_HPP
 #define KVSTORE_CORE_WAL_HPP
 
+#include "kvstore/util/types.hpp"
+
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -13,8 +15,6 @@
 namespace kvstore::core {
 
 enum class EntryType : uint8_t { Put = 1, PutWithTTL = 2, Remove = 3, Clear = 4 };
-
-using ExpirationTime = std::optional<int64_t>;  // milliseconds since epoch or nullopt
 
 class WriteAheadLog {
    public:
@@ -45,7 +45,7 @@ class WriteAheadLog {
             void replay(F&& callback);
     */
     // for recovery (called once at startup) std::function is fine and keeps interface simple
-    void replay(std::function<void(EntryType, std::string_view, std::string_view, ExpirationTime)>
+    void replay(std::function<void(EntryType, std::string_view, std::string_view, util::ExpirationTime)>
                     callback);
 
     void sync();
@@ -60,7 +60,10 @@ class WriteAheadLog {
                               int64_t expires_at_ms);
 
     [[nodiscard]] bool read_entry(std::ifstream& in, EntryType& type, std::string& key,
-                                  std::string& value, ExpirationTime& expires_at);
+                                  std::string& value, util::ExpirationTime& expires_at);
+
+    static constexpr uint32_t kMagic = 0x4B56574C // "KVWL"
+    static constexpr uint32_t KVersion = 1;
 
     std::filesystem::path path_;
     std::ofstream out_;
