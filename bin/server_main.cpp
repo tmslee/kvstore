@@ -1,5 +1,6 @@
 #include <csignal>
 #include <iostream>
+#include <thread>
 
 #include "kvstore/core/store.hpp"
 #include "kvstore/net/server.hpp"

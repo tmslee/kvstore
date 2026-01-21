@@ -20,15 +20,14 @@ class Server {
     ~Server();
     /*
         note on copy&moves:
-        - server owns threads, socket fd, and reference to store. copying is nonsensical.
-        - unclear ownership of core::Store& store_ after move. delete moves
-            - also threads capture this pointer in their lambdas. moving would lead those threads
-       holding dangling pointers to old location
+        - server owns Impl which has threads & mutex and socket fds under the hood
+        - copying is not safe
+        - move would normally not safe either but since we did PIMPL, move is trivial and allowed
     */
     Server(const Server&) = delete;
     Server& operator=(const Server&) = delete;
-    Server(Server&&) = delete;
-    Server& operator=(Server&&) = delete;
+    Server(Server&&) noexcept;
+    Server& operator=(Server&&) noexcept;
 
     void start();
     void stop();

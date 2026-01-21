@@ -35,6 +35,16 @@ public:
         }
     }
 
+    /*
+        note: compiler auto generates copy/move only if all members support it.
+        std::mutex - not cpyable not moveable
+        std::thread - not copyable, moveable
+        std::atomic - not copyable, movable
+        std::vector<std::thread> - not copyabl, moveable
+        - because of mutex, compiler auto deletes both for Impl
+        - but also we dont care because we never copy or move Impl direcly, only move unique_ptr<Impl>
+    */ 
+    
     void start() {
         /*
             1. create socket with protocols (IPv4 & TCP)
@@ -97,7 +107,7 @@ public:
         // set running flag, spawn thread to accept connections
         server_fd_.store(fd);
         running_ = true;
-        accept_thread_ = std::thread(&Server::accept_loop, this);
+        accept_thread_ = std::thread(&Impl::accept_loop, this);
     }
 
     void stop() {
@@ -130,7 +140,15 @@ public:
         client_threads_.clear();
         // std::lock_guard ctor can technically throw. rare but possible.
     }
-    
+
+    [[nodiscard]] bool running() const noexcept {
+        return running_;
+    }
+
+    [[nodiscard]] uint16_t port() const noexcept {
+        return options_.port;
+    }
+
 private:
     void accept_loop() {
         while (running_) {
@@ -151,7 +169,7 @@ private:
             }
             {
                 std::lock_guard lock(clients_mutex_);
-                client_threads_.emplace_back(&Server::handle_client, this, client_fd);
+                client_threads_.emplace_back(&Impl::handle_client, this, client_fd);
             }
         }
     }
@@ -227,15 +245,26 @@ private:
                 return Protocol::error("usage: PUT key value");
             }
             std::string value;
-            for (size_t i = 1; i < cmd.args.size(); i++) {
-                if (i > 1) {
-                    value += " ";
-                }
+            for (size_t i = 1; i < cmd.args.size(); ++i) {
+                if (i > 1) value += " ";
                 value += cmd.args[i];
             }
             store_.put(cmd.args[0], value);
             return Protocol::ok();
 
+        } else if (cmd.command == "PUTEX" || cmd.command == "SETEX") {
+            if (cmd.args.size() < 3) {
+                return Protocol::error("usage: PUTEX key milliseconds value");
+            }
+            auto ttl = util::Duration(std::stoll(cmd.args[1]));
+            std::string value;
+            for (size_t i = 2; i < cmd.args.size(); ++i) {
+                if (i > 2) value += " ";
+                value += cmd.args[i];
+            }
+            store_.put(cmd.args[0], value, ttl);
+            return Protocol::ok();
+            
         } else if (cmd.command == "DEL" || cmd.command == "DELETE" || cmd.command == "REMOVE") {
             if (cmd.args.size() != 1) {
                 return Protocol::error("usage: DEL key");
@@ -302,4 +331,5 @@ bool Server::running() const noexcept {
 uint16_t Server::port() const noexcept {
     return impl_->port();
 }
+
 }  // namespace kvstore::net
