@@ -2,9 +2,9 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <signal.h>
 
 #include <atomic>
 #include <cstring>
@@ -23,10 +23,10 @@ namespace util = kvstore::util;
 
 namespace {
 
-//install once at startup to ignore SIGPIPE
+// install once at startup to ignore SIGPIPE
 /*
-    when you write to socket that the other end has closed, OS sends your process a SIGPIPE signal -> default behavior: terminate the process
-    2 ways to handle:
+    when you write to socket that the other end has closed, OS sends your process a SIGPIPE signal
+   -> default behavior: terminate the process 2 ways to handle:
     1. signal(SIGPIPE, SIG_IGN) -> ignore globally, send() returns -1 with errno = EPIPE
     2. MSG_NOSIGNAL flag on each send() call - same effect, per call
     - we do both for afety
@@ -39,7 +39,7 @@ struct SigpipeIgnorer {
 
 static SigpipeIgnorer sigpipe_ignorer;
 
-} //namespace
+}  // namespace
 
 class Server::Impl {
    public:
@@ -66,7 +66,7 @@ class Server::Impl {
             5. mark for listen
             6. spawn thread to accept connections
         */
-        if(running_) {
+        if (running_) {
             return;
         }
         // AF_INET = IPv4, SOCK_STREAM = TCP
@@ -75,8 +75,8 @@ class Server::Impl {
         int fd = socket(AF_INET, SOCK_STREAM, 0);
         if (fd < 0) {
             throw std::runtime_error("failed to create socket: " + std::string(strerror(errno)));
-            //note: errno is global (thread-local) variable set by syscalls on failure.
-            //errno only vaid immediately after failed call. any subsequent call may overwrite
+            // note: errno is global (thread-local) variable set by syscalls on failure.
+            // errno only vaid immediately after failed call. any subsequent call may overwrite
         }
 
         // SO_REUSEADDR lets us rebind to port immediately after restart. without it you get
@@ -112,7 +112,8 @@ class Server::Impl {
         // to this socket
         if (bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
             close(fd);
-            throw std::runtime_error("failed to bind to port " + std::to_string(options_.port) + ": " + std::string(strerror(errno)));
+            throw std::runtime_error("failed to bind to port " + std::to_string(options_.port) +
+                                     ": " + std::string(strerror(errno)));
         }
 
         // mark socket as listening - SOMAXCONN is max backlog of pending connections
@@ -169,18 +170,18 @@ class Server::Impl {
    private:
     struct ClientInfo {
         std::thread thread;
-        std::atomic<bool> finished {false};
+        std::atomic<bool> finished{false};
     };
 
     void accept_loop() {
         while (running_) {
-            //clean up finished client threads periodically
+            // clean up finished client threads periodically
             cleanup_finished_clients();
-            
-            //check connection limit
+
+            // check connection limit
             {
                 std::lock_guard lock(clients_mutex_);
-                if(clients_.size() >= options_.max_connections) {
+                if (clients_.size() >= options_.max_connections) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                     continue;
                 }
@@ -196,7 +197,7 @@ class Server::Impl {
 
             int client_fd =
                 accept(server_fd_, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
-            
+
             if (client_fd < 0) {
                 if (running_ && errno != EINTR) {  // retry if we're still running
                     std::cerr << "Accept failed: " << strerror(errno) << std::endl;
@@ -205,7 +206,7 @@ class Server::Impl {
             }
 
             // set client socket timeout
-            if(options_.client_timeout_seconds > 0) {
+            if (options_.client_timeout_seconds > 0) {
                 struct timeval tv;
                 tv.tv_sec = options_.client_timeout_seconds;
                 tv.tv_usec = 0;
@@ -219,13 +220,15 @@ class Server::Impl {
                 /*
                     IMPORTANT NOTE:
                     - std::thread copies arguments by default!
-                    - if we pass ClientInfo by value, bceause it contains std::thread (not copyable) this will not work
+                    - if we pass ClientInfo by value, bceause it contains std::thread (not copyable)
+                   this will not work
                     - if we pass ClientInfo by reference, it will work but we need std::ref()
-                        i.e. std::thread(&Impl::handle_client, this, client_fd, std::ref(*info_ptr));
+                        i.e. std::thread(&Impl::handle_client, this, client_fd,
+                   std::ref(*info_ptr));
                         - this is fine but gotta rmb + error msgs are confusing
                     - if we just pass by pointer, this is simple & explicit
                 */
-                info -> thread = std::thread(&Impl::handle_client, this, client_fd, info_ptr);
+                info->thread = std::thread(&Impl::handle_client, this, client_fd, info_ptr);
                 clients_.push_back(std::move(info));
             }
         }
@@ -234,9 +237,9 @@ class Server::Impl {
     void cleanup_finished_clients() {
         std::lock_guard lock(clients_mutex_);
         auto it = clients_.begin();
-        while(it != clients_.end()) {
-            if((*it)->finished.load()) {
-                if((*it)->thread.joinable()) {
+        while (it != clients_.end()) {
+            if ((*it)->finished.load()) {
+                if ((*it)->thread.joinable()) {
                     (*it)->thread.join();
                 }
                 it = clients_.erase(it);
@@ -253,21 +256,21 @@ class Server::Impl {
 
             while (running_) {
                 ssize_t bytes_read = recv(client_fd, chunk, sizeof(chunk) - 1, 0);
-                
+
                 // negative bytes_read = error.
                 // 0 bytes_read = disconnect
                 if (bytes_read < 0) {
-                    if(errno == EAGAIN || errno == EWOULDBLOCK) {
-                        //timeout - client idle too long
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        // timeout - client idle too long
                         break;
                     }
-                    if(errno == EINTR) {
-                        continue; //retry
+                    if (errno == EINTR) {
+                        continue;  // retry
                     }
-                    //other error
+                    // other error
                     break;
-                } 
-                if(bytes_read == 0) {
+                }
+                if (bytes_read == 0) {
                     break;
                 }
 
@@ -305,13 +308,13 @@ class Server::Impl {
                     std::string response = Protocol::serialize(result);
 
                     // send failed
-                    if(!send_all(client_fd, response)) {
+                    if (!send_all(client_fd, response)) {
                         close(client_fd);
                         info->finished.store(true);
                         return;
-                    } 
+                    }
                     // client requested disconnect
-                    if(result.close_connection) {
+                    if (result.close_connection) {
                         close(client_fd);
                         info->finished.store(true);
                         return;
@@ -323,23 +326,24 @@ class Server::Impl {
         } catch (...) {
             std::cerr << "Client handler unknown error" << std::endl;
         }
-        
+
         close(client_fd);
         info->finished.store(true);
     }
 
     bool send_all(int fd, const std::string& data) {
-        //loop until bytes sent for partial sends
+        // loop until bytes sent for partial sends
         size_t total_sent = 0;
-        while(total_sent < data.size()) {
-            ssize_t sent = send(fd, data.c_str() + total_sent, data.size() - total_sent, MSG_NOSIGNAL);
-            if(sent < 0) {
-                if(errno == EINTR) {
-                    continue; //retry
+        while (total_sent < data.size()) {
+            ssize_t sent =
+                send(fd, data.c_str() + total_sent, data.size() - total_sent, MSG_NOSIGNAL);
+            if (sent < 0) {
+                if (errno == EINTR) {
+                    continue;  // retry
                 }
                 return false;
             }
-            if(sent == 0) {
+            if (sent == 0) {
                 return false;
             }
             total_sent += sent;
@@ -439,7 +443,9 @@ class Server::Impl {
 
     std::thread accept_thread_;
 
-    //important note: we use std::vector<std::unique_ptr<>> bceause vector reallocation will invalidate address of stored objects. using a pointer alleviates this - heap objects have stable addresses.
+    // important note: we use std::vector<std::unique_ptr<>> bceause vector reallocation will
+    // invalidate address of stored objects. using a pointer alleviates this - heap objects have
+    // stable addresses.
     std::vector<std::unique_ptr<ClientInfo>> clients_;
     std::mutex clients_mutex_;
 };
