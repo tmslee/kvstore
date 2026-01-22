@@ -84,4 +84,23 @@ TEST(ProtocolTest, ErrorDoesNotCloseConnection) {
     EXPECT_FALSE(Protocol::error("err").close_connection);
 }
 
+TEST(ProtocolTest, ParsePutEx) {
+    auto cmd = Protocol::parse("PUTEX key1 1000 hello world");
+    EXPECT_EQ(cmd.command, "PUTEX");
+    ASSERT_EQ(cmd.args.size(), 4);
+    EXPECT_EQ(cmd.args[0], "key1");
+    EXPECT_EQ(cmd.args[1], "1000");
+    EXPECT_EQ(cmd.args[2], "hello");
+    EXPECT_EQ(cmd.args[3], "world");
+}
+
+TEST(ProtocolTest, ParseSetEx) {
+    auto cmd = Protocol::parse("SETEX key1 500 value");
+    EXPECT_EQ(cmd.command, "SETEX");
+    ASSERT_EQ(cmd.args.size(), 3);
+    EXPECT_EQ(cmd.args[0], "key1");
+    EXPECT_EQ(cmd.args[1], "500");
+    EXPECT_EQ(cmd.args[2], "value");
+}
+
 }  // namespace kvstore::net::test

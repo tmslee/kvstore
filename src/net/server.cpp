@@ -208,7 +208,16 @@ class Server::Impl {
                 buffer.erase(0, pos + 1);
 
                 // append newline so client can recognize end of response
-                CommandResult result = process_command(line);
+                CommandResult result;
+                // catch any exceptions and return as Protocol::error
+                try {
+                    result = process_command(line);
+                } catch (const std::exception& e) {
+                    result = Protocol::error(std::string("internal error: ") + e.what());
+                } catch (...) {
+                    result = Protocol::error("internal error");
+                }
+
                 std::string response = Protocol::serialize(result);
 
                 // send response. if fail, close and exit.
