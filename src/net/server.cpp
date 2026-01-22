@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include <atomic>
 #include <cstring>
@@ -18,23 +19,34 @@
 
 namespace kvstore::net {
 
+namespace util = kvstore::util;
+
+namespace {
+
+//install once at startup to ignore SIGPIPE
+/*
+    when you write to socket that the other end has closed, OS sends your process a SIGPIPE signal -> default behavior: terminate the process
+    2 ways to handle:
+    1. signal(SIGPIPE, SIG_IGN) -> ignore globally, send() returns -1 with errno = EPIPE
+    2. MSG_NOSIGNAL flag on each send() call - same effect, per call
+    - we do both for afety
+*/
+struct SigpipeIgnorer {
+    SigpipeIgnorer() {
+        signal(SIGPIPE, SIG_IGN);
+    }
+};
+
+static SigpipeIgnorer sigpipe_ignorer;
+
+} //namespace
+
 class Server::Impl {
    public:
     Impl(core::IStore& store, const ServerOptions& options) : store_(store), options_(options) {}
-
     ~Impl() {
-        // destructor should NOT throw.
-        // but stop() CAN throw -> refer to the method implementation
-        // here we log and swallow
-        try {
-            stop();
-        } catch (const std::exception& e) {
-            std::cerr << "Server::~Server: stop() failed: " << e.what() << "\n";
-        } catch (...) {
-            std::cerr << "Server::~Server: stop() failed with unkown error\n";
-        }
+        stop();
     }
-
     /*
         note: compiler auto generates copy/move only if all members support it.
         std::mutex - not cpyable not moveable
@@ -45,7 +57,6 @@ class Server::Impl {
         - but also we dont care because we never copy or move Impl direcly, only move
        unique_ptr<Impl>
     */
-
     void start() {
         /*
             1. create socket with protocols (IPv4 & TCP)
@@ -55,16 +66,19 @@ class Server::Impl {
             5. mark for listen
             6. spawn thread to accept connections
         */
-
-        int fd = socket(AF_INET, SOCK_STREAM, 0);
+        if(running_) {
+            return;
+        }
         // AF_INET = IPv4, SOCK_STREAM = TCP
         // socket sctor returns a file descriptor (integer handle)
         // negative means error
+        int fd = socket(AF_INET, SOCK_STREAM, 0);
         if (fd < 0) {
-            throw std::runtime_error("failed to create socket");
+            throw std::runtime_error("failed to create socket: " + std::string(strerror(errno)));
+            //note: errno is global (thread-local) variable set by syscalls on failure.
+            //errno only vaid immediately after failed call. any subsequent call may overwrite
         }
 
-        int opt = 1;
         // SO_REUSEADDR lets us rebind to port immediately after restart. without it you get
         // "address already in use" for ~30s after stopping
         /*
@@ -73,9 +87,11 @@ class Server::Impl {
             IPPROTO_TCP (TCP protocol layer) : TCP_NODELAY, TCP_KEEPIDLE ...
             IPPROTO_IP (IP protocol layer) : IP_TTL, IP_MULTICAST_IF ...
         */
+        int opt = 1;
+
         if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
             close(fd);
-            throw std::runtime_error("failed to set socket options");
+            throw std::runtime_error("failed to set SO_REUSEADDR: " + std::string(strerror(errno)));
         }
 
         // set up address struct. htons conver port to network byte order (big-endian)
@@ -87,7 +103,7 @@ class Server::Impl {
         // & store in addr.sin_addr
         if (inet_pton(AF_INET, options_.host.c_str(), &addr.sin_addr) <= 0) {
             close(fd);
-            throw std::runtime_error("invalid address: " + options_.host);
+            throw std::runtime_error("Invalid address: " + options_.host);
         }
 
         // bind associated socket with specific address and port
@@ -96,13 +112,13 @@ class Server::Impl {
         // to this socket
         if (bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
             close(fd);
-            throw std::runtime_error("failed to bind to port" + std::to_string(options_.port));
+            throw std::runtime_error("failed to bind to port " + std::to_string(options_.port) + ": " + std::string(strerror(errno)));
         }
 
         // mark socket as listening - SOMAXCONN is max backlog of pending connections
         if (listen(fd, SOMAXCONN) < 0) {
             close(fd);
-            throw std::runtime_error("failed to listen");
+            throw std::runtime_error("failed to listen: " + std::string(strerror(errno)));
         }
 
         // set running flag, spawn thread to accept connections
@@ -133,12 +149,12 @@ class Server::Impl {
 
         // wait for all client handler threds to finish, then clear vector.
         std::lock_guard lock(clients_mutex_);  // can throw std::system_error
-        for (auto& t : client_threads_) {
-            if (t.joinable()) {
-                t.join();  // noexcept
+        for (auto& info : clients_) {
+            if (info->thread.joinable()) {
+                info->thread.join();  // noexcept
             }
         }
-        client_threads_.clear();
+        clients_.clear();
         // std::lock_guard ctor can technically throw. rare but possible.
     }
 
@@ -151,8 +167,25 @@ class Server::Impl {
     }
 
    private:
+    struct ClientInfo {
+        std::thread thread;
+        std::atomic<bool> finished {false};
+    };
+
     void accept_loop() {
         while (running_) {
+            //clean up finished client threads periodically
+            cleanup_finished_clients();
+            
+            //check connection limit
+            {
+                std::lock_guard lock(clients_mutex_);
+                if(clients_.size() >= options_.max_connections) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    continue;
+                }
+            }
+
             sockaddr_in client_addr{};
             socklen_t client_len = sizeof(client_addr);
 
@@ -163,78 +196,161 @@ class Server::Impl {
 
             int client_fd =
                 accept(server_fd_, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
+            
             if (client_fd < 0) {
-                if (running_) {  // retry if we're still running
-                    continue;
+                if (running_ && errno != EINTR) {  // retry if we're still running
+                    std::cerr << "Accept failed: " << strerror(errno) << std::endl;
                 }
-                break;  // exit if we're done
+                continue;
+            }
+
+            // set client socket timeout
+            if(options_.client_timeout_seconds > 0) {
+                struct timeval tv;
+                tv.tv_sec = options_.client_timeout_seconds;
+                tv.tv_usec = 0;
+                setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+                setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
             }
             {
                 std::lock_guard lock(clients_mutex_);
-                client_threads_.emplace_back(&Impl::handle_client, this, client_fd);
+                auto info = std::make_unique<ClientInfo>();
+                auto* info_ptr = info.get();
+                /*
+                    IMPORTANT NOTE:
+                    - std::thread copies arguments by default!
+                    - if we pass ClientInfo by value, bceause it contains std::thread (not copyable) this will not work
+                    - if we pass ClientInfo by reference, it will work but we need std::ref()
+                        i.e. std::thread(&Impl::handle_client, this, client_fd, std::ref(*info_ptr));
+                        - this is fine but gotta rmb + error msgs are confusing
+                    - if we just pass by pointer, this is simple & explicit
+                */
+                info -> thread = std::thread(&Impl::handle_client, this, client_fd, info_ptr);
+                clients_.push_back(std::move(info));
             }
         }
     }
 
-    void handle_client(int client_fd) {
-        std::string buffer;
-        char chunk[1024];
-
-        while (running_) {
-            ssize_t bytes_read = recv(client_fd, chunk, sizeof(chunk) - 1, 0);
-            // 0 = client closed connection, negative = error.
-            if (bytes_read <= 0) {
-                break;
-            }
-
-            // null-terminate the chunk @ end of bytes read and append to buffer
-            // chunk is a C-string: without null term it would read past valid data into garbage
-            // memory. alternatively, buffer.append(chunk, bytes_read);
-            /*
-                IMPORTANT NOTE: network APIs are C functions. we use c-strings (null terminated
-            character) because:
-                    - direct compatibility with syscalls
-                    - no heap allocation for small buffers
-                    - explicit control over memory layout
-            */
-            chunk[bytes_read] = '\0';
-            buffer += chunk;
-
-            size_t pos;
-            // while we have complete lines in our buffer, extract the line from buffer (1 full
-            // command) and process it.
-            while ((pos = buffer.find('\n')) != std::string::npos) {
-                std::string line = buffer.substr(0, pos);
-                buffer.erase(0, pos + 1);
-
-                // append newline so client can recognize end of response
-                CommandResult result;
-                // catch any exceptions and return as Protocol::error
-                try {
-                    result = process_command(line);
-                } catch (const std::exception& e) {
-                    result = Protocol::error(std::string("internal error: ") + e.what());
-                } catch (...) {
-                    result = Protocol::error("internal error");
+    void cleanup_finished_clients() {
+        std::lock_guard lock(clients_mutex_);
+        auto it = clients_.begin();
+        while(it != clients_.end()) {
+            if((*it)->finished.load()) {
+                if((*it)->thread.joinable()) {
+                    (*it)->thread.join();
                 }
-
-                std::string response = Protocol::serialize(result);
-
-                // send response. if fail, close and exit.
-                if (send(client_fd, response.c_str(), response.size(), 0) < 0) {
-                    close(client_fd);
-                    return;
-                }
-
-                if (result.close_connection) {
-                    close(client_fd);
-                    return;
-                }
+                it = clients_.erase(it);
+            } else {
+                ++it;
             }
         }
+    }
+
+    void handle_client(int client_fd, ClientInfo* info) {
+        try {
+            std::string buffer;
+            char chunk[1024];
+
+            while (running_) {
+                ssize_t bytes_read = recv(client_fd, chunk, sizeof(chunk) - 1, 0);
+                
+                // negative bytes_read = error.
+                // 0 bytes_read = disconnect
+                if (bytes_read < 0) {
+                    if(errno == EAGAIN || errno == EWOULDBLOCK) {
+                        //timeout - client idle too long
+                        break;
+                    }
+                    if(errno == EINTR) {
+                        continue; //retry
+                    }
+                    //other error
+                    break;
+                } 
+                if(bytes_read == 0) {
+                    break;
+                }
+
+                // null-terminate the chunk @ end of bytes read and append to buffer
+                // chunk is a C-string: without null term it would read past valid data into garbage
+                // memory. alternatively, buffer.append(chunk, bytes_read);
+                /*
+                    IMPORTANT NOTE: network APIs are C functions. we use c-strings (null terminated
+                character) because:
+                        - direct compatibility with syscalls
+                        - no heap allocation for small buffers
+                        - explicit control over memory layout
+                */
+                chunk[bytes_read] = '\0';
+                buffer += chunk;
+
+                size_t pos;
+                // while we have complete lines in our buffer, extract the line from buffer (1 full
+                // command) and process it.
+                while ((pos = buffer.find('\n')) != std::string::npos) {
+                    std::string line = buffer.substr(0, pos);
+                    buffer.erase(0, pos + 1);
+
+                    // append newline so client can recognize end of response
+                    CommandResult result;
+                    // catch any exceptions and return as Protocol::error
+                    try {
+                        result = process_command(line);
+                    } catch (const std::exception& e) {
+                        result = Protocol::error(std::string("internal error: ") + e.what());
+                    } catch (...) {
+                        result = Protocol::error("internal error");
+                    }
+
+                    std::string response = Protocol::serialize(result);
+
+                    // send failed
+                    if(!send_all(client_fd, response)) {
+                        close(client_fd);
+                        info->finished.store(true);
+                        return;
+                    } 
+                    // client requested disconnect
+                    if(result.close_connection) {
+                        close(client_fd);
+                        info->finished.store(true);
+                        return;
+                    }
+                }
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Client handler error: " << e.what() << std::endl;
+        } catch (...) {
+            std::cerr << "Client handler unknown error" << std::endl;
+        }
+        
         close(client_fd);
+        info->finished.store(true);
     }
 
+    bool send_all(int fd, const std::string& data) {
+        //loop until bytes sent for partial sends
+        size_t total_sent = 0;
+        while(total_sent < data.size()) {
+            ssize_t sent = send(fd, data.c_str() + total_sent, data.size() - total_sent, MSG_NOSIGNAL);
+            if(sent < 0) {
+                if(errno == EINTR) {
+                    continue; //retry
+                }
+                return false;
+            }
+            if(sent == 0) {
+                return false;
+            }
+            total_sent += sent;
+        }
+        return true;
+    }
+
+    /*
+        note: we use Protocol::error() when client did something wrong. we tell them
+        std::cerr is used for internal issues. we log for operations
+    */
     CommandResult process_command(const std::string& line) {
         ParsedCommand cmd = Protocol::parse(line);
         if (cmd.command.empty()) {
@@ -316,13 +432,15 @@ class Server::Impl {
     core::IStore& store_;
     ServerOptions options_;
 
-    std::atomic<int> server_fd_ = -1;
+    std::atomic<int> server_fd_{-1};
     // server_fd_ needs to be atomic bc it gets written by main thread in stop()
     // while its read in accept_loop() by another thread.
-    std::atomic<bool> running_ = false;
+    std::atomic<bool> running_{false};
 
     std::thread accept_thread_;
-    std::vector<std::thread> client_threads_;
+
+    //important note: we use std::vector<std::unique_ptr<>> bceause vector reallocation will invalidate address of stored objects. using a pointer alleviates this - heap objects have stable addresses.
+    std::vector<std::unique_ptr<ClientInfo>> clients_;
     std::mutex clients_mutex_;
 };
 
