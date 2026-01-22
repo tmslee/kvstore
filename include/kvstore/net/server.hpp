@@ -12,6 +12,8 @@ namespace kvstore::net {
 struct ServerOptions {
     std::string host = "127.0.0.1";  // local host
     uint16_t port = 6379;            // redis' default port. convention for k-v stores
+    std::size_t max_connections = 1000;
+    int client_timeout_seconds = 300;  // 5 minutes
 };
 
 class Server {
