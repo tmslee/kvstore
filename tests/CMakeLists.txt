@@ -71,7 +71,7 @@ target_link_libraries(disk_store_test
 )
 
 add_executable(signal_handler_test
-    core/signal_handler_test.cpp
+    util/signal_handler_test.cpp
 )
 target_link_libraries(signal_handler_test
     PRIVATE

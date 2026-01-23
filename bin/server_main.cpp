@@ -15,7 +15,7 @@ int main(int argc, char* argv[]) {
             if((arg == "-p" || arg == "--[port]") && i+1 < argc) {
                 port = static_cast<uint16_t>(std::stoi(argv[++i]));
             } else if ((arg == "-d" || arg == "--data-dir") && i+1 < argc) {
-                dat_dir = argv[++i];
+                data_dir = argv[++i];
             } else if ((arg == "-h") || arg == "--help") {
                 std::cout << "Usage: " << argv[0] << " [options]\n"
                     << "Options:\n"
@@ -32,7 +32,6 @@ int main(int argc, char* argv[]) {
         store_opts.persistence_path = std::filesystem::path(data_dir) / "store.wal";
         store_opts.snapshot_path = std::filesystem::path(data_dir) / "store.snap";
         store_opts.snapshot_threshold = 10000;
-        kvstore::core::StoreOptions store_opts;
         kvstore::core::Store store(store_opts);
 
         //setup server

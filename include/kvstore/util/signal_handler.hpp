@@ -4,20 +4,20 @@
 #include <atomic>
 #include <functional>
 
-namespace kvstore::util{
+namespace kvstore::util {
 
-class SignalHandler{
-public:
+class SignalHandler {
+   public:
     static void install();
     static bool should_shutdown();
     static void wait_for_shutdown();
     static void request_shutdown();
     static void reset();
 
-private:
-    static std::atomic<bool>shutdown_requested_;
+   private:
+    static std::atomic<bool> shutdown_requested_;
 };
 
-} //namespace kvstore::util
+}  // namespace kvstore::util
 
 #endif

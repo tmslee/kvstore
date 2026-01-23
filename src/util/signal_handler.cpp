@@ -1,12 +1,12 @@
 #include "kvstore/util/signal_handler.hpp"
 
-#include <csignal>
 #include <condition_variable>
+#include <csignal>
 #include <mutex>
 
 namespace kvstore::util {
 
-std::atomic<bool> SignalHandler::shutown_requested_{false};
+std::atomic<bool> SignalHandler::shutdown_requested_{false};
 
 namespace {
 
@@ -18,9 +18,9 @@ void signal_handler(int signal) {
     SignalHandler::request_shutdown();
 }
 
-} //namespace
+}  // namespace
 
-void SignalHandler::install {
+void SignalHandler::install() {
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
 }
@@ -31,7 +31,7 @@ bool SignalHandler::should_shutdown() {
 
 void SignalHandler::wait_for_shutdown() {
     std::unique_lock lock(shutdown_mutex);
-    shutdown_cv.wait(lock, []{return shutdown_requested_.load();});
+    shutdown_cv.wait(lock, [] { return shutdown_requested_.load(); });
 }
 
 void SignalHandler::request_shutdown() {
@@ -43,4 +43,4 @@ void SignalHandler::reset() {
     shutdown_requested_.store(false);
 }
 
-} //namespace kvstore::util
+}  // namespace kvstore::util
