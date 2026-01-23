@@ -3,7 +3,7 @@
 #include "kvstore/core/store.hpp"
 #include "kvstore/net/server.hpp"
 #include "kvstore/util/signal_handler.hpp"
-#include "kvtore/util/logger.hpp"
+#include "kvstore/util/logger.hpp"
 
 int main(int argc, char* argv[]) {
     try {
@@ -18,18 +18,18 @@ int main(int argc, char* argv[]) {
                 port = static_cast<uint16_t>(std::stoi(argv[++i]));
             } else if ((arg == "-d" || arg == "--data-dir") && i+1 < argc) {
                 data_dir = argv[++i];
-            } else if ((arg == "-l" || arg == "--log-level" && i+1 < argc)) {
+            } else if ((arg == "-l" || arg == "--log-level") && i+1 < argc) {
                 std::string level = argv[++i];
                 if(level == "debug") {
-                    log_level = kvstore::util::Loglevel::Debug;
+                    log_level = kvstore::util::LogLevel::Debug;
                 } else if (level == "info") {
-                    log_level = kvstore::util::Loglevel::Info;
+                    log_level = kvstore::util::LogLevel::Info;
                 } else if (level == "warn") {
-                    log_level = kvstore::util::Loglevel::Warn;
+                    log_level = kvstore::util::LogLevel::Warn;
                 } else if (level == "error") {
-                    log_level = kvstore::util::Loglevel::Error;
+                    log_level = kvstore::util::LogLevel::Error;
                 } else if (level == "none") {
-                    log_level = kvstore::util::Loglevel::None;
+                    log_level = kvstore::util::LogLevel::None;
                 }
             } else if ((arg == "-h") || arg == "--help") {
                 std::cout << "Usage: " << argv[0] << " [options]\n"

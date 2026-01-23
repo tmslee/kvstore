@@ -33,7 +33,7 @@ TEST(LoggerTest, LogMethods) {
     LOG_WARN("macro warn");
     LOG_ERROR("macro error");
 
-    logger::instance().set_level(LogLevel::Info);
+    Logger::instance().set_level(LogLevel::Info);
 }
 
 TEST(LoggerTest, LevelFiltering) {
@@ -47,7 +47,7 @@ TEST(LoggerTest, LevelFiltering) {
     Logger::instance().warn("visible warn");
     Logger::instance().error("visible error");
 
-    Logger::instance().set_level(LogLevel : Info);
+    Logger::instance().set_level(LogLevel::Info);
 }
 
 }  // namespace kvstore::util::test

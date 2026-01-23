@@ -39,7 +39,7 @@ void Logger::error(std::string_view message) {
     log(LogLevel::Error, message);
 }
 
-void LoggeR::log(LogLevel level, std::string_view message) {
+void Logger::log(LogLevel level, std::string_view message) {
     if (level < level_.load()) {
         return;
     }

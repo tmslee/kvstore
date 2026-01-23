@@ -16,6 +16,7 @@
 
 #include "kvstore/net/protocol.hpp"
 #include "kvstore/util/types.hpp"
+#include "kvstore/util/logger.hpp"
 
 namespace kvstore::net {
 
