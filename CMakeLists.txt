@@ -50,6 +50,7 @@ target_sources(kvstore
         src/core/disk_store.cpp
         src/util/signal_handler.cpp
         src/util/logger.cpp
+        src/util/config.cpp
 )
 
 target_include_directories(kvstore
