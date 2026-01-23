@@ -228,6 +228,10 @@ class Server::Impl {
                         - this is fine but gotta rmb + error msgs are confusing
                     - if we just pass by pointer, this is simple & explicit
                 */
+
+                // we pass 'this' to thread because handle_client is a member function.
+                // member functions have an implicit this paramter:
+                //      - void handle_client(Impl* this, int fd, ClientInfo* info);
                 info->thread = std::thread(&Impl::handle_client, this, client_fd, info_ptr);
                 clients_.push_back(std::move(info));
             }

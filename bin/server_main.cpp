@@ -1,44 +1,87 @@
-#include <csignal>
 #include <iostream>
-#include <thread>
 
 #include "kvstore/core/store.hpp"
 #include "kvstore/net/server.hpp"
+#include "kvstore/util/signal_handler.hpp"
 
-namespace {
-kvstore::net::Server* g_server = nullptr;
+int main(int argc, char* argv[]) {
+    try {
+        uint16_t port = 6379;
+        std::string data_dir = "./data";
 
-void signal_handler(int) {
-    if (g_server != nullptr) {
-        g_server->stop();
+        //arg parse
+        for(int i=1; i<argc; ++i) {
+            std::string arg = argv[i];
+            if((arg == "-p" || arg == "--[port]") && i+1 < argc) {
+                port = static_cast<uint16_t>(std::stoi(argv[++i]));
+            } else if ((arg == "-d" || arg == "--data-dir") && i+1 < argc) {
+                data_dir = argv[++i];
+            } else if ((arg == "-h") || arg == "--help") {
+                std::cout << "Usage: " << argv[0] << " [options]\n"
+                    << "Options:\n"
+                    << "  -p, --port PORT      Port to listen on (default: 6379)\n"
+                    << "  -d, --data-dir DIR   Data directory (default: ./data)\n"
+                    << "  -h, --help           Show this help\n";
+                return 0;
+            }
+        }
+
+        //set up store with persistence
+        std::filesystem::create_directories(data_dir);
+        kvstore::core::StoreOptions store_opts;
+        store_opts.persistence_path = std::filesystem::path(data_dir) / "store.wal";
+        store_opts.snapshot_path = std::filesystem::path(data_dir) / "store.snap";
+        store_opts.snapshot_threshold = 10000;
+        kvstore::core::Store store(store_opts);
+
+        //setup server
+        kvstore::net::ServerOptions server_opts;
+        server_opts.port = port;
+        kvstore::net::Server server(store, server_opts);
+
+        //install signal handlers
+        kvstore::util::SignalHandler::install();
+
+        //start server   
+        server.start();
+        std::cout << "Server listening on port " << port << std::endl;
+        std::cout << "Press Ctrl+C to shutdown" << std::endl;
+
+        //wait for shutdown signal
+        kvstore::util::SignalHandler::wait_for_shutdown();
+        std::cout << "\nShutting down..." << std::endl;
+
+        // stop server (drains connections)
+        server.stop();
+
+        
+        /*
+            note on manual shutdown
+            - manual shutdown
+                - pros:
+                    explicit: caller knows whats happening
+                    flexible: maybe caller doesnt want snapshot
+                    store doesnt know about shutdown.
+                - cons:
+                    easy to forget
+                    caller must understand internals
+
+            - auto shutdown
+                - pros: 
+                    cant forget, caller must understand internals
+        */
+        //flush store (snapshot)
+        std::cout << "Saving snapshot..." << std::endl;
+        store.snapshot();
+
+        std::cout << "Shutdown complete" << std::endl;
+        
+        return 0;
+
+    } catch (const std::exception& e) {
+        std::cerr << "Fatal error: " << e.what() << std::endl;
+        return 1;
     }
-}
 
-}  // namespace
-
-int main() {
-    kvstore::core::StoreOptions store_opts;
-    store_opts.persistence_path = "data.wal";
-
-    kvstore::core::Store store(store_opts);
-
-    kvstore::net::ServerOptions server_opts;
-    server_opts.port = 6379;
-
-    kvstore::net::Server server(store, server_opts);
-    g_server = &server;
-
-    std::signal(SIGINT, signal_handler);
-    std::signal(SIGTERM, signal_handler);
-
-    std::cout << "Starting kvstore server on port " << server_opts.port << "...\n";
-    server.start();
-    std::cout << "Server running. press Ctrl+C to stop.\n";
-
-    while (server.running()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-
-    std::cout << "Server stopped.\n";
-    return 0;
+    
 }
