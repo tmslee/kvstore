@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <thread>
+#include <csignal>
 
 namespace kvstore::util::test {
 
