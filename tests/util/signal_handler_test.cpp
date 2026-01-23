@@ -2,8 +2,8 @@
 
 #include <gtest/gtest.h>
 
-#include <thread>
 #include <csignal>
+#include <thread>
 
 namespace kvstore::util::test {
 
