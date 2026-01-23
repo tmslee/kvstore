@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 
 namespace kvstore::util::test {
- 
+
 TEST(LoggerTest, DefautlLevelIsInfo) {
     EXPECT_EQ(Logger::instance().level(), LogLevel::Info);
 }
@@ -15,12 +15,12 @@ TEST(LoggerTest, SetLevel) {
     Logger::instance().set_level(LogLevel::Error);
     EXPECT_EQ(Logger::instance().level(), LogLevel::Error);
 
-    //reset to default
+    // reset to default
     Logger::instance().set_level(LogLevel::Info);
 }
 
 TEST(LoggerTest, LogMethods) {
-    //these just verify no crash- output goes to stdout/stderr
+    // these just verify no crash- output goes to stdout/stderr
     Logger::instance().set_level(LogLevel::Debug);
 
     Logger::instance().debug("debug message");
@@ -38,16 +38,16 @@ TEST(LoggerTest, LogMethods) {
 
 TEST(LoggerTest, LevelFiltering) {
     Logger::instance().set_level(LogLevel::Warn);
-    
-    //these should be filtered out (no crash, just no output)
+
+    // these should be filtered out (no crash, just no output)
     Logger::instance().debug("filtered debug");
     Logger::instance().info("filtered info");
 
-    //these should appear
+    // these should appear
     Logger::instance().warn("visible warn");
     Logger::instance().error("visible error");
 
-    Logger::instance().set_level(LogLevel:Info);
+    Logger::instance().set_level(LogLevel : Info);
 }
 
-} //namespace kvstore::util::test
+}  // namespace kvstore::util::test

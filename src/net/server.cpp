@@ -266,6 +266,8 @@ class Server::Impl {
             std::string buffer;
             char chunk[1024];
 
+            // note: running_ is atomic<bool>. when you use atomic in a boolean context, it
+            // implicitly calls load()
             while (running_) {
                 ssize_t bytes_read = recv(client_fd, chunk, sizeof(chunk) - 1, 0);
 
