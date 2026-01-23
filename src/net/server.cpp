@@ -15,8 +15,8 @@
 #include <vector>
 
 #include "kvstore/net/protocol.hpp"
-#include "kvstore/util/types.hpp"
 #include "kvstore/util/logger.hpp"
+#include "kvstore/util/types.hpp"
 
 namespace kvstore::net {
 
