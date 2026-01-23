@@ -55,6 +55,22 @@ int main(int argc, char* argv[]) {
         // stop server (drains connections)
         server.stop();
 
+        
+        /*
+            note on manual shutdown
+            - manual shutdown
+                - pros:
+                    explicit: caller knows whats happening
+                    flexible: maybe caller doesnt want snapshot
+                    store doesnt know about shutdown.
+                - cons:
+                    easy to forget
+                    caller must understand internals
+
+            - auto shutdown
+                - pros: 
+                    cant forget, caller must understand internals
+        */
         //flush store (snapshot)
         std::cout << "Saving snapshot..." << std::endl;
         store.snapshot();
@@ -62,7 +78,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Shutdown complete" << std::endl;
         
         return 0;
-        
+
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
         return 1;

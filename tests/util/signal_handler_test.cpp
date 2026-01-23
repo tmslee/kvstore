@@ -6,21 +6,50 @@
 
 namespace kvstore::util::test {
 
-TEST(SignalHandlerTest, InitiallyNotShutdown) {
-    //note: cant fully reset static state between tests
-    //this test assumes it runs first or state is clean
+class SignalHandlerTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        SignalHandler::reset();
+        SignalHandler::install();
+    }
+};
+
+TEST_F(SignalHandlerTest, InitiallyNotShutdown) {
     EXPECT_FALSE(SignalHandler::should_shutdown());
 }
 
-TEST(SignalHandlerTest, RequestShutdown) {
+TEST_F(SignalHandlerTest, RequestShutdown) {
     SignalHandler::request_shutdown();
     EXPECT_TRUE(SignalHandler::should_shutdown());
 }
 
-TEST(SignalHandlerTest, WaitForShutdownReuturnsWhenRequested) {
-    //request is already set from previous test
-    //wait_for_shutdown should return immediately
-    SignalHandler::wait_for_shutdown();
+TEST_F(SignalHandlerTest, HandlesSIGINT) {
+    std::thread waiter([] {
+        SignalHandler::wait_for_shutdown();
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    EXPECT_FALSE(SignalHandler::should_shutdown());
+
+    raise(SIGINT);
+
+    waiter.join();
+    EXPECT_TRUE(SignalHandler::should_shutdown());
+}
+
+TEST_F(SignalHandlerTest, HandlesSIGTERM) {
+    SignalHandler::reset();
+
+    std::thread waiter([] {
+        SignalHandler::wait_for_shutdown();
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    EXPECT_FALSE(SignalHandler::should_shutdown());
+
+    raise(SIGTERM);
+
+    waiter.join();
     EXPECT_TRUE(SignalHandler::should_shutdown());
 }
 

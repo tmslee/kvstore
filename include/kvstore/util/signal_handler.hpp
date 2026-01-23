@@ -12,6 +12,7 @@ public:
     static bool should_shutdown();
     static void wait_for_shutdown();
     static void request_shutdown();
+    static void reset();
 
 private:
     static std::atomic<bool>shutdown_requested_;

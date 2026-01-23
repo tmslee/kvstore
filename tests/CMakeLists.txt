@@ -69,6 +69,16 @@ target_link_libraries(disk_store_test
         kvstore
         GTest::gtest_main
 )
+
+add_executable(signal_handler_test
+    core/signal_handler_test.cpp
+)
+target_link_libraries(signal_handler_test
+    PRIVATE
+        kvstore
+        GTest::gtest_main
+)
+
 if(ENABLE_ASAN OR ENABLE_TSAN OR ENABLE_UBSAN)
     # Sanitizer builds: skip discovery, just run the executable
     add_test(NAME store_test COMMAND store_test)
@@ -79,6 +89,7 @@ if(ENABLE_ASAN OR ENABLE_TSAN OR ENABLE_UBSAN)
     add_test(NAME snapshot_test COMMAND snapshot_test)
     add_test(NAME ttl_test COMMAND ttl_test)
     add_test(NAME disk_store_test COMMAND disk_store_test)
+    add_test(NAME signal_handler_test COMMAND signal_handler_test)
 else()
     # Normal builds: use discovery for better CTest integration
     include(GoogleTest)
@@ -90,4 +101,5 @@ else()
     gtest_discover_tests(snapshot_test)
     gtest_discover_tests(ttl_test)
     gtest_discover_tests(disk_store_test)
+    gtest_discover_tests(signal_handler_test)
 endif()

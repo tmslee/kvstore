@@ -39,4 +39,8 @@ void SignalHandler::request_shutdown() {
     shutdown_cv.notify_all();
 }
 
+void SignalHandler::reset() {
+    shutdown_requested_.store(false);
+}
+
 } //namespace kvstore::util
