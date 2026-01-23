@@ -49,6 +49,7 @@ target_sources(kvstore
         src/core/snapshot.cpp
         src/core/disk_store.cpp
         src/util/signal_handler.cpp
+        src/util/logger.cpp
 )
 
 target_include_directories(kvstore
