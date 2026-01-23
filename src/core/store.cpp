@@ -153,6 +153,10 @@ class Store::Impl {
         }
     }
 
+    void flush() {
+        snapshot();
+    }
+
     void snapshot() {
         std::unique_lock lock(mutex_);
         do_snapshot();
@@ -273,6 +277,9 @@ bool Store::empty() const {
 }
 void Store::clear() {
     impl_->clear();
+}
+void Store::flush() {
+    impl_->flush();
 }
 void Store::snapshot() {
     impl_->snapshot();

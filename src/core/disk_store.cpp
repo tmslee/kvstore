@@ -170,6 +170,10 @@ class DiskStore::Impl {
         entry_count_ = 0;
     }
 
+    void flush() {
+        compact();
+    }
+
     void compact() {
         std::unique_lock lock(mutex_);
         do_compact();
@@ -406,6 +410,9 @@ bool DiskStore::empty() const {
 }
 void DiskStore::clear() {
     impl_->clear();
+}
+void DiskStore::flush() {
+    impl_->flush();
 }
 void DiskStore::compact() {
     impl_->compact();

@@ -89,14 +89,9 @@ int main(int argc, char* argv[]) {
         //stop server
         server.stop();
 
-        //save state if using in-memory store
-        if(!config.use_disk_store) {
-            LOG_INFO("Saving snapshot...");
-            auto* mem_store = dynamic_cast<kvstore::core::Store*>(store.get());
-            if(mem_store) {
-                mem_store->snapshot();
-            }
-        }
+        //flush store (snapshot for Store, compact for DiskStore)
+        LOG_INFO("Flushing store...");
+        store->flush();
 
         LOG_INFO("Shutdown complete");
         return 0;
