@@ -40,6 +40,7 @@ class DiskStore : public IStore {
     [[nodiscard]] bool empty() const override;
 
     void clear() override;
+    void flush() override;
     void compact();
 
    private:

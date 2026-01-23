@@ -24,6 +24,7 @@ class IStore {
     [[nodiscard]] virtual bool empty() const = 0;
 
     virtual void clear() = 0;
+    virtual void flush() = 0;
 };
 
 }  // namespace kvstore::core

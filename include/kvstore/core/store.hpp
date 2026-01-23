@@ -72,6 +72,7 @@ class Store : public IStore {
     [[nodiscard]] bool empty() const override;
 
     void clear() override;
+    void flush() override;
 
     void snapshot();
     void cleanup_expired();

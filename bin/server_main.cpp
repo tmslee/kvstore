@@ -1,99 +1,103 @@
 #include <iostream>
 
 #include "kvstore/core/store.hpp"
+#include "kvstore/core/disk_store.hpp"
 #include "kvstore/net/server.hpp"
 #include "kvstore/util/signal_handler.hpp"
 #include "kvstore/util/logger.hpp"
+#include "kvstore/util/config.hpp"
 
 int main(int argc, char* argv[]) {
     try {
-        uint16_t port = 6379;
-        std::string data_dir = "./data";
-        kvstore::util::LogLevel log_level = kvstore::util::LogLevel::Info;
+        kvstore::util::Config defaults;
+        kvstore::util::Config file_config = defaults;
+        kvstore::util::Config cli_config = defaults;
 
-        //arg parse
+        //first pass: find config_path;
+        std::filesystem::path config_path;
         for(int i=1; i<argc; ++i) {
             std::string arg = argv[i];
-            if((arg == "-p" || arg == "--[port]") && i+1 < argc) {
-                port = static_cast<uint16_t>(std::stoi(argv[++i]));
-            } else if ((arg == "-d" || arg == "--data-dir") && i+1 < argc) {
-                data_dir = argv[++i];
-            } else if ((arg == "-l" || arg == "--log-level") && i+1 < argc) {
-                std::string level = argv[++i];
-                if(level == "debug") {
-                    log_level = kvstore::util::LogLevel::Debug;
-                } else if (level == "info") {
-                    log_level = kvstore::util::LogLevel::Info;
-                } else if (level == "warn") {
-                    log_level = kvstore::util::LogLevel::Warn;
-                } else if (level == "error") {
-                    log_level = kvstore::util::LogLevel::Error;
-                } else if (level == "none") {
-                    log_level = kvstore::util::LogLevel::None;
-                }
-            } else if ((arg == "-h") || arg == "--help") {
-                std::cout << "Usage: " << argv[0] << " [options]\n"
-                    << "Options:\n"
-                    << "  -p, --port PORT      Port to listen on (default: 6379)\n"
-                    << "  -d, --data-dir DIR   Data directory (default: ./data)\n"
-                    << "  -h, --help           Show this help\n";
-                return 0;
+            if((arg == "-c" || arg == "--config") && i+1 < argc) {
+                config_path = argv[++i];
+                break;
             }
         }
 
-        //set log level
-        kvstore::util::Logger::instance().set_level(log_level);
+        //load config file if specified
+        if(!config_path.empty()) {
+            auto loaded = kvstore::util::Config::load_file(config_path);
+            if(loaded) {
+                file_config = *loaded;
+            } else {
+                std::cerr << "Warning: Could not load config file: " << config_path << std::endl;
+            }
+        }
 
-        //set up store with persistence
-        std::filesystem::create_directories(data_dir);
-        kvstore::core::StoreOptions store_opts;
-        store_opts.persistence_path = std::filesystem::path(data_dir) / "store.wal";
-        store_opts.snapshot_path = std::filesystem::path(data_dir) / "store.snap";
-        store_opts.snapshot_threshold = 10000;
-        kvstore::core::Store store(store_opts);
+        auto cli_result = kvstore::util::Config::parse_args(argc, argv);
+        if(!cli_result) {
+            return 0; //--help was shown
+        }
+        cli_config = *cli_result;
+
+        //Merge: CLI > file > defaults
+        auto config = kvstore::util::Config::merge(file_config, cli_config, defaults);
+
+        //setup logger
+        kvstore::util::Logger::instance().set_level(config.log_level);
+
+        //create data dir
+        std::filesystem::create_directories(config.data_dir);
+
+        //setup store
+        std::unique_ptr<kvstore::core::IStore> store;
+
+        if(config.use_disk_store) {
+            kvstore::core::DiskStoreOptions opts;
+            opts.data_dir = config.data_dir;
+            opts.compaction_threshold = config.compaction_threshold;
+            store = std::make_unique<kvstore::core::DiskStore>(opts);
+            LOG_INFO("Using disk-based storage");
+        } else {
+            kvstore::core::StoreOptions opts;
+            opts.persistence_path = config.data_dir / "store.wal";
+            opts.snapshot_path = config.data_dir / "store.snap";
+            opts.snapshot_threshold = config.snapshot_threshold;
+            store = std::make_unique<kvstore::core::Store>(opts);
+            LOG_INFO("Using in-memory storage with WAL");
+        }
 
         //setup server
         kvstore::net::ServerOptions server_opts;
-        server_opts.port = port;
-        kvstore::net::Server server(store, server_opts);
+        server_opts.host = config.host;
+        server_opts.port = config.port;
+        server_opts.max_connections = config.max_connections;
+        server_opts.client_timeout_seconds = config.client_timeout_seconds;
+
+        kvstore::net::Server server(*store, server_opts);
 
         //install signal handlers
         kvstore::util::SignalHandler::install();
 
-        //start server   
+        //start server
         server.start();
+
         LOG_INFO("Press Ctrl+C to shutdown");
+
         //wait for shutdown signal
         kvstore::util::SignalHandler::wait_for_shutdown();
-        std::cout << "\nShutting down..." << std::endl;
 
-        // stop server (drains connections)
+        //stop server
         server.stop();
 
-        /*
-            note on manual shutdown
-            - manual shutdown
-                - pros:
-                    explicit: caller knows whats happening
-                    flexible: maybe caller doesnt want snapshot
-                    store doesnt know about shutdown.
-                - cons:
-                    easy to forget
-                    caller must understand internals
+        //flush store (snapshot for Store, compact for DiskStore)
+        LOG_INFO("Flushing store...");
+        store->flush();
 
-            - auto shutdown
-                - pros: 
-                    cant forget, caller must understand internals
-        */
-        //flush store (snapshot)
-        LOG_INFO("Saving snapshot...");
-        store.snapshot();
-
-        LOG_INFO("Shutdown complete")        
+        LOG_INFO("Shutdown complete");
         return 0;
-
+    
     } catch (const std::exception& e) {
-        LOG_ERROR("Fatal_error: " + std::string(e.what()));
+        LOG_ERROR("fatal error: " + std::string(e.what()));
         return 1;
     }
 }
