@@ -51,6 +51,7 @@ target_sources(kvstore
         src/util/signal_handler.cpp
         src/util/logger.cpp
         src/util/config.cpp
+        src/net/binary_protocol.cpp
 )
 
 target_include_directories(kvstore
