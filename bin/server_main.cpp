@@ -3,11 +3,13 @@
 #include "kvstore/core/store.hpp"
 #include "kvstore/net/server.hpp"
 #include "kvstore/util/signal_handler.hpp"
+#include "kvtore/util/logger.hpp"
 
 int main(int argc, char* argv[]) {
     try {
         uint16_t port = 6379;
         std::string data_dir = "./data";
+        kvstore::util::LogLevel log_level = kvstore::util::LogLevel::Info;
 
         //arg parse
         for(int i=1; i<argc; ++i) {
@@ -16,6 +18,19 @@ int main(int argc, char* argv[]) {
                 port = static_cast<uint16_t>(std::stoi(argv[++i]));
             } else if ((arg == "-d" || arg == "--data-dir") && i+1 < argc) {
                 data_dir = argv[++i];
+            } else if ((arg == "-l" || arg == "--log-level" && i+1 < argc)) {
+                std::string level = argv[++i];
+                if(level == "debug") {
+                    log_level = kvstore::util::Loglevel::Debug;
+                } else if (level == "info") {
+                    log_level = kvstore::util::Loglevel::Info;
+                } else if (level == "warn") {
+                    log_level = kvstore::util::Loglevel::Warn;
+                } else if (level == "error") {
+                    log_level = kvstore::util::Loglevel::Error;
+                } else if (level == "none") {
+                    log_level = kvstore::util::Loglevel::None;
+                }
             } else if ((arg == "-h") || arg == "--help") {
                 std::cout << "Usage: " << argv[0] << " [options]\n"
                     << "Options:\n"
@@ -25,6 +40,9 @@ int main(int argc, char* argv[]) {
                 return 0;
             }
         }
+
+        //set log level
+        kvstore::util::Logger::instance().set_level(log_level);
 
         //set up store with persistence
         std::filesystem::create_directories(data_dir);
@@ -44,9 +62,7 @@ int main(int argc, char* argv[]) {
 
         //start server   
         server.start();
-        std::cout << "Server listening on port " << port << std::endl;
-        std::cout << "Press Ctrl+C to shutdown" << std::endl;
-
+        LOG_INFO("Press Ctrl+C to shutdown");
         //wait for shutdown signal
         kvstore::util::SignalHandler::wait_for_shutdown();
         std::cout << "\nShutting down..." << std::endl;
@@ -54,7 +70,6 @@ int main(int argc, char* argv[]) {
         // stop server (drains connections)
         server.stop();
 
-        
         /*
             note on manual shutdown
             - manual shutdown
@@ -71,17 +86,14 @@ int main(int argc, char* argv[]) {
                     cant forget, caller must understand internals
         */
         //flush store (snapshot)
-        std::cout << "Saving snapshot..." << std::endl;
+        LOG_INFO("Saving snapshot...");
         store.snapshot();
 
-        std::cout << "Shutdown complete" << std::endl;
-        
+        LOG_INFO("Shutdown complete")        
         return 0;
 
     } catch (const std::exception& e) {
-        std::cerr << "Fatal error: " << e.what() << std::endl;
+        LOG_ERROR("Fatal_error: " + std::string(e.what()));
         return 1;
     }
-
-    
 }

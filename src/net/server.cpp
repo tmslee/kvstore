@@ -126,6 +126,8 @@ class Server::Impl {
         server_fd_.store(fd);
         running_ = true;
         accept_thread_ = std::thread(&Impl::accept_loop, this);
+
+        LOG_INFO("Server started on " + options_.host + ":" + std::to_string(options_.port));
     }
 
     void stop() {
@@ -134,6 +136,8 @@ class Server::Impl {
         if (!running_.exchange(false)) {
             return;
         }
+
+        LOG_INFO("Server stopping...");
 
         int fd = server_fd_.exchange(-1);
         // shutdown stops reads and writes, unblocking any threads stuck in accept()
@@ -157,6 +161,8 @@ class Server::Impl {
         }
         clients_.clear();
         // std::lock_guard ctor can technically throw. rare but possible.
+
+        LOG_INFO("Server stopped");
     }
 
     [[nodiscard]] bool running() const noexcept {
@@ -200,10 +206,12 @@ class Server::Impl {
 
             if (client_fd < 0) {
                 if (running_ && errno != EINTR) {  // retry if we're still running
-                    std::cerr << "Accept failed: " << strerror(errno) << std::endl;
+                    LOG_ERROR("Accept failed: " + std::string(strerror(errno)));
                 }
                 continue;
             }
+
+            LOG_DEBUG("Client connected, fd=" + std::to_string(client_fd));
 
             // set client socket timeout
             if (options_.client_timeout_seconds > 0) {
@@ -326,13 +334,14 @@ class Server::Impl {
                 }
             }
         } catch (const std::exception& e) {
-            std::cerr << "Client handler error: " << e.what() << std::endl;
+            LOG_ERROR("Client handle error: " + std::string(e.what()));
         } catch (...) {
-            std::cerr << "Client handler unknown error" << std::endl;
+            LOG_ERROR("Client handler unkown error");
         }
 
         close(client_fd);
         info->finished.store(true);
+        LOG_DEBUG("Client disconnected, fd=" + std::to_string(client_fd));
     }
 
     bool send_all(int fd, const std::string& data) {
