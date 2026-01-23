@@ -38,7 +38,7 @@ void LoggeR::log(LogLevel level, std::string_view message) {
     }
 
     std::lock_guard lock(mutex_);
-
+    
     std::ostream& out = (level >= LogLevel::Warn) ? std::cerr : std::cout;
     out << timestamp() << " [" << level_string(level) << "] " << message << std::endl;
 }
