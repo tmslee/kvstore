@@ -1,9 +1,11 @@
 #include <iostream>
 
 #include "kvstore/core/store.hpp"
+#include "kvstore/core/disk_store.hpp"
 #include "kvstore/net/server.hpp"
 #include "kvstore/util/signal_handler.hpp"
 #include "kvstore/util/logger.hpp"
+#include "kvstore/util/config.hpp"
 
 int main(int argc, char* argv[]) {
     try {
@@ -15,7 +17,7 @@ int main(int argc, char* argv[]) {
         std::filesystem::path config_path;
         for(int i=1; i<argc; ++i) {
             std::string arg = argv[i];
-            if((arg == "-c" || arg == "--config") && i+! < argc) {
+            if((arg == "-c" || arg == "--config") && i+1 < argc) {
                 config_path = argv[++i];
                 break;
             }

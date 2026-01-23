@@ -8,12 +8,12 @@
 namespace kvstore::util::test {
 
 class ConfigTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {
         test_dir_ = std::filesystem::temp_directory_path() / "config_test";
         std::filesystem::create_directories(test_dir_);
     }
-    
+
     void TearDown() override {
         std::filesystem::remove_all(test_dir_);
     }
@@ -21,7 +21,7 @@ protected:
     std::filesystem::path test_dir_;
 };
 
-TEST_F(ConfigTest, DefaultValues){
+TEST_F(ConfigTest, DefaultValues) {
     Config config;
     EXPECT_EQ(config.host, "127.0.0.1");
     EXPECT_EQ(config.port, 6379);
@@ -31,7 +31,7 @@ TEST_F(ConfigTest, DefaultValues){
     EXPECT_FALSE(config.use_disk_store);
 }
 
-TEST_F(ConfigTest, LoadFile){
+TEST_F(ConfigTest, LoadFile) {
     auto path = test_dir_ / "test.conf";
     {
         std::ofstream f(path);
@@ -49,7 +49,7 @@ TEST_F(ConfigTest, LoadFile){
     EXPECT_TRUE(config->use_disk_store);
 }
 
-TEST_F(ConfigTest, LoadFileWithComments){
+TEST_F(ConfigTest, LoadFileWithComments) {
     auto path = test_dir_ / "test.conf";
     {
         std::ofstream f(path);
@@ -66,12 +66,12 @@ TEST_F(ConfigTest, LoadFileWithComments){
     EXPECT_EQ(config->host, "localhost");
 }
 
-TEST_F(ConfigTest, LoadFileNotFound){
+TEST_F(ConfigTest, LoadFileNotFound) {
     auto config = Config::load_file("/nonexistent/path/config.conf");
     EXPECT_FALSE(config.has_value());
 }
 
-TEST_F(ConfigTest, ParseArgs){
+TEST_F(ConfigTest, ParseArgs) {
     const char* argv[] = {"program", "-p", "8080", "-H", "0.0.0.0", "-l", "debug"};
     int argc = 7;
 
@@ -82,7 +82,7 @@ TEST_F(ConfigTest, ParseArgs){
     EXPECT_EQ(config->log_level, LogLevel::Debug);
 }
 
-TEST_F(ConfigTest, ParseArgsHelp){
+TEST_F(ConfigTest, ParseArgsHelp) {
     const char* argv[] = {"program", "--help"};
     int argc = 2;
 
@@ -90,7 +90,7 @@ TEST_F(ConfigTest, ParseArgsHelp){
     EXPECT_FALSE(config.has_value());
 }
 
-TEST_F(ConfigTest, MergeConfigs){
+TEST_F(ConfigTest, MergeConfigs) {
     Config defaults;
     Config file_config = defaults;
     Config cli_config = defaults;
@@ -106,4 +106,4 @@ TEST_F(ConfigTest, MergeConfigs){
     EXPECT_EQ(result.host, "0.0.0.0");  // File wins (CLI was default)
 }
 
-} //namespace kvstore::util::test
+}  // namespace kvstore::util::test
