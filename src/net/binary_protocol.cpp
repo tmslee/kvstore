@@ -111,7 +111,7 @@ std::vector<uint8_t> BinaryProtocol::encode_request(const BinaryRequest& req) {
     }
 
     std::vector<uint8_t> result;
-    result.reserver(4 + payload.size());
+    result.reserve(4 + payload.size());
     write_uint32_be(result, static_cast<uint32_t>(payload.size()));  // prepend length
     result.insert(result.end(), payload.begin(), payload.end());     // insert payload
 
