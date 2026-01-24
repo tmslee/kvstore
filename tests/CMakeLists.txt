@@ -106,6 +106,15 @@ target_link_libraries(binary_protocol_test
         GTest::gtest_main
 )
 
+add_executable(protocol_handler_test
+    net/protocol_handler_test.cpp
+)
+target_link_libraries(protocol_handler_test
+    PRIVATE
+        kvstore
+        GTest::gtest_main
+)
+
 if(ENABLE_ASAN OR ENABLE_TSAN OR ENABLE_UBSAN)
     # Sanitizer builds: skip discovery, just run the executable
     add_test(NAME store_test COMMAND store_test)
@@ -120,6 +129,7 @@ if(ENABLE_ASAN OR ENABLE_TSAN OR ENABLE_UBSAN)
     add_test(NAME logger_test COMMAND logger_test)
     add_test(NAME config_test COMMAND config_test)
     add_test(NAME binary_protocol_test COMMAND binary_protocol_test)
+    add_test(NAME protocol_handler_test COMMAND protocol_handler_test)
 else()
     # Normal builds: use discovery for better CTest integration
     include(GoogleTest)
@@ -135,4 +145,5 @@ else()
     gtest_discover_tests(logger_test)
     gtest_discover_tests(config_test)
     gtest_discover_tests(binary_protocol_test)
+    gtest_discover_tests(protocol_handler_test)
 endif()
