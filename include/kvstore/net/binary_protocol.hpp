@@ -43,26 +43,28 @@ struct BinaryResponse {
 };
 
 class BinaryProtocol {
-public:
-    //encode request to bytes
+   public:
+    // encode request to bytes
     static std::vector<uint8_t> encode_request(const BinaryRequest& req);
 
-    //decode request from bytes (returns nullopt if incomplete)
-    static std::optional<BinaryRequest> decode_request(const std::vector<uint8_t>& data, size_t& bytes_consumed);
+    // decode request from bytes (returns nullopt if incomplete)
+    static std::optional<BinaryRequest> decode_request(const std::vector<uint8_t>& data,
+                                                       size_t& bytes_consumed);
 
-    //encode response to bytes
+    // encode response to bytes
     static std::vector<uint8_t> encode_response(const BinaryResponse& resp);
 
-    //decode response form bytes (returns nullopt if incomplete)
-    static std::optional<BinaryResponse> decode_response(const std::vector<uint8_t>& data, size_t& bytes_consumed);
+    // decode response form bytes (returns nullopt if incomplete)
+    static std::optional<BinaryResponse> decode_response(const std::vector<uint8_t>& data,
+                                                         size_t& bytes_consumed);
 
-    //heler: check if buffer has complete message
+    // heler: check if buffer has complete message
     static bool has_complete_message(const std::vector<uint8_t>& data);
 
-    //helper: get message length from header
+    // helper: get message length from header
     static uint32_t peek_message_length(const std::vector<uint8_t>& data);
 };
 
-} //namespace kvstore::net
+}  // namespace kvstore::net
 
 #endif
