@@ -1,4 +1,4 @@
-#include "kvstore/net/server.hpp"
+#include "kvstore/net/server/server.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -14,11 +14,11 @@
 #include <thread>
 #include <vector>
 
-#include "kvstore/net/text_protocol.hpp"
+#include "kvstore/net/server/protocol_handler.hpp"
 #include "kvstore/util/logger.hpp"
 #include "kvstore/util/types.hpp"
 
-namespace kvstore::net {
+namespace kvstore::net::server {
 
 namespace util = kvstore::util;
 
@@ -45,6 +45,7 @@ static SigpipeIgnorer sigpipe_ignorer;
 class Server::Impl {
    public:
     Impl(core::IStore& store, const ServerOptions& options) : store_(store), options_(options) {}
+
     ~Impl() {
         stop();
     }
@@ -212,8 +213,6 @@ class Server::Impl {
                 continue;
             }
 
-            LOG_DEBUG("Client connected, fd=" + std::to_string(client_fd));
-
             // set client socket timeout
             if (options_.client_timeout_seconds > 0) {
                 struct timeval tv;
@@ -222,6 +221,9 @@ class Server::Impl {
                 setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
                 setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
             }
+
+            LOG_DEBUG("Client connected, fd=" + std::to_string(client_fd));
+
             {
                 std::lock_guard lock(clients_mutex_);
                 auto info = std::make_unique<ClientInfo>();
@@ -264,76 +266,30 @@ class Server::Impl {
 
     void handle_client(int client_fd, ClientInfo* info) {
         try {
-            std::string buffer;
-            char chunk[1024];
-
+            auto handler = create_protocol_handler(client_fd, options_.binary_only);
+            if(!handler) {
+                close(client_fd);
+                info->finished.store(true);
+                return;
+            }
             // note: running_ is atomic<bool>. when you use atomic in a boolean context, it
             // implicitly calls load()
             while (running_) {
-                ssize_t bytes_read = recv(client_fd, chunk, sizeof(chunk) - 1, 0);
-
-                // negative bytes_read = error.
-                // 0 bytes_read = disconnect
-                if (bytes_read < 0) {
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        // timeout - client idle too long
-                        break;
-                    }
-                    if (errno == EINTR) {
-                        continue;  // retry
-                    }
-                    // other error
+                auto request = handler->read_request(client_fd);
+                if(!request) {
                     break;
                 }
-                if (bytes_read == 0) {
-                    break;
+                Response response;
+                try{
+                    response = process_request(*request);
+                } catch (const std::exception& e) {
+                    response = Response::error(std::string("internal error: ") + e.what());
+                } catch (...) {
+                    response = Response::error("internal error");
                 }
-
-                // null-terminate the chunk @ end of bytes read and append to buffer
-                // chunk is a C-string: without null term it would read past valid data into garbage
-                // memory. alternatively, buffer.append(chunk, bytes_read);
-                /*
-                    IMPORTANT NOTE: network APIs are C functions. we use c-strings (null terminated
-                character) because:
-                        - direct compatibility with syscalls
-                        - no heap allocation for small buffers
-                        - explicit control over memory layout
-                */
-                chunk[bytes_read] = '\0';
-                buffer += chunk;
-
-                size_t pos;
-                // while we have complete lines in our buffer, extract the line from buffer (1 full
-                // command) and process it.
-                while ((pos = buffer.find('\n')) != std::string::npos) {
-                    std::string line = buffer.substr(0, pos);
-                    buffer.erase(0, pos + 1);
-
-                    // append newline so client can recognize end of response
-                    CommandResult result;
-                    // catch any exceptions and return as TextProtocol::error
-                    try {
-                        result = process_command(line);
-                    } catch (const std::exception& e) {
-                        result = TextProtocol::error(std::string("internal error: ") + e.what());
-                    } catch (...) {
-                        result = TextProtocol::error("internal error");
-                    }
-
-                    std::string response = TextProtocol::serialize(result);
-
-                    // send failed
-                    if (!send_all(client_fd, response)) {
-                        close(client_fd);
-                        info->finished.store(true);
-                        return;
-                    }
-                    // client requested disconnect
-                    if (result.close_connection) {
-                        close(client_fd);
-                        info->finished.store(true);
-                        return;
-                    }
+                
+                if(!handler->write_response(client_fd, response) || response.close_connection) {
+                    break;
                 }
             }
         } catch (const std::exception& e) {
@@ -347,106 +303,69 @@ class Server::Impl {
         LOG_DEBUG("Client disconnected, fd=" + std::to_string(client_fd));
     }
 
-    bool send_all(int fd, const std::string& data) {
-        // loop until bytes sent for partial sends
-        size_t total_sent = 0;
-        while (total_sent < data.size()) {
-            ssize_t sent =
-                send(fd, data.c_str() + total_sent, data.size() - total_sent, MSG_NOSIGNAL);
-            if (sent < 0) {
-                if (errno == EINTR) {
-                    continue;  // retry
+    Response process_request(const Request& req) {
+        switch (req.command) {
+            case Command::Get: {
+                if (req.key.empty()) {
+                    return Response::error("usage: GET key");
                 }
-                return false;
+                auto result = store_.get(req.key);
+                if (result.has_value()) {
+                    return Response::ok(*result);
+                }
+                return Response::not_found();
             }
-            if (sent == 0) {
-                return false;
+
+            case Command::Put: {
+                if (req.key.empty()) {
+                    return Response::error("usage: PUT key value");
+                }
+                store_.put(req.key, req.value);
+                return Response::ok();
             }
-            total_sent += sent;
+
+            case Command::PutEx: {
+                if (req.key.empty()) {
+                    return Response::error("usage: PUTEX key ms value");
+                }
+                store_.put(req.key, req.value, util::Duration(req.ttl_ms));
+                return Response::ok();
+            }
+
+            case Command::Del: {
+                if (req.key.empty()) {
+                    return Response::error("usage: DEL key");
+                }
+                if (store_.remove(req.key)) {
+                    return Response::ok();
+                }
+                return Response::not_found();
+            }
+
+            case Command::Exists: {
+                if (req.key.empty()) {
+                    return Response::error("usage: EXISTS key");
+                }
+                return Response::ok(store_.contains(req.key) ? "1" : "0");
+            }
+
+            case Command::Size:
+                return Response::ok(std::to_string(store_.size()));
+
+            case Command::Clear:
+                store_.clear();
+                return Response::ok();
+
+            case Command::Ping:
+                return Response::ok("PONG");
+
+            case Command::Quit:
+                return Response::bye();
+
+            case Command::Unknown:
+            default:
+                return Response::error("unknown command");
         }
-        return true;
-    }
-
-    /*
-        note: we use TextProtocol::error() when client did something wrong. we tell them
-        std::cerr is used for internal issues. we log for operations
-    */
-    CommandResult process_command(const std::string& line) {
-        ParsedCommand cmd = TextProtocol::parse(line);
-        if (cmd.command.empty()) {
-            return TextProtocol::error("empty command");
-        }
-
-        if (cmd.command == "GET") {
-            if (cmd.args.size() != 1) {
-                return TextProtocol::error("usage: GET key");
-            }
-            auto result = store_.get(cmd.args[0]);
-            if (result.has_value()) {
-                return TextProtocol::ok(*result);
-            }
-            return TextProtocol::not_found();
-
-        } else if (cmd.command == "PUT" || cmd.command == "SET") {
-            if (cmd.args.size() < 2) {
-                return TextProtocol::error("usage: PUT key value");
-            }
-            std::string value;
-            for (size_t i = 1; i < cmd.args.size(); ++i) {
-                if (i > 1)
-                    value += " ";
-                value += cmd.args[i];
-            }
-            store_.put(cmd.args[0], value);
-            return TextProtocol::ok();
-
-        } else if (cmd.command == "PUTEX" || cmd.command == "SETEX") {
-            if (cmd.args.size() < 3) {
-                return TextProtocol::error("usage: PUTEX key milliseconds value");
-            }
-            auto ttl = util::Duration(std::stoll(cmd.args[1]));
-            std::string value;
-            for (size_t i = 2; i < cmd.args.size(); ++i) {
-                if (i > 2)
-                    value += " ";
-                value += cmd.args[i];
-            }
-            store_.put(cmd.args[0], value, ttl);
-            return TextProtocol::ok();
-
-        } else if (cmd.command == "DEL" || cmd.command == "DELETE" || cmd.command == "REMOVE") {
-            if (cmd.args.size() != 1) {
-                return TextProtocol::error("usage: DEL key");
-            }
-            if (store_.remove(cmd.args[0])) {
-                return TextProtocol::ok();
-            }
-            return TextProtocol::not_found();
-
-        } else if (cmd.command == "EXISTS" || cmd.command == "CONTAINS") {
-            if (cmd.args.size() != 1) {
-                return TextProtocol::error("usage: EXISTS key");
-            }
-            if (store_.contains(cmd.args[0])) {
-                return TextProtocol::ok("1");
-            }
-            return TextProtocol::ok("0");
-
-        } else if (cmd.command == "SIZE" || cmd.command == "COUNT") {
-            return TextProtocol::ok(std::to_string(store_.size()));
-
-        } else if (cmd.command == "CLEAR") {
-            store_.clear();
-            return TextProtocol::ok();
-
-        } else if (cmd.command == "PING") {
-            return TextProtocol::ok("PONG");
-
-        } else if (cmd.command == "QUIT" || cmd.command == "EXIT") {
-            return TextProtocol::bye();
-        }
-
-        return TextProtocol::error("unkown command: " + cmd.command);
     }
 
     core::IStore& store_;

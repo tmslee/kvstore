@@ -1,19 +1,21 @@
-#ifndef KVSTORE_NET_SERVER_HPP
-#define KVSTORE_NET_SERVER_HPP
+#ifndef KVSTORE_NET_SERVER_SERVER_HPP
+#define KVSTORE_NET_SERVER_SERVER_HPP
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
 
 #include "kvstore/core/istore.hpp"
 
-namespace kvstore::net {
+namespace kvstore::net::server {
 
 struct ServerOptions {
     std::string host = "127.0.0.1";  // local host
     uint16_t port = 6379;            // redis' default port. convention for k-v stores
     std::size_t max_connections = 1000;
     int client_timeout_seconds = 300;  // 5 minutes
+    bool binary_only = false;
 };
 
 class Server {
@@ -42,6 +44,6 @@ class Server {
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace kvstore::net
+}  // namespace kvstore::net::server
 
 #endif

@@ -1,4 +1,6 @@
 #include "kvstore/net/client/client.hpp"
+#include "kvstore/net/client/protocol_handler.hpp"
+#include "kvstore/net/types.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -7,13 +9,13 @@
 
 #include <stdexcept>
 
-namespace kvstore::net {
+namespace kvstore::net::client {
 
 namespace util = kvstore::util;
 
 class Client::Impl {
    public:
-    explicit Impl(const ClientOptions& options) : options_(options) {}
+    explicit Impl(const ClientOptions& options) : options_(options), protocol_(create_protocol_handler(options.binary)) {}
 
     ~Impl() {
         disconnect();
@@ -72,134 +74,95 @@ class Client::Impl {
     cant continue anyway)
     */
     void put(std::string_view key, std::string_view value) {
-        std::string cmd = "PUT " + std::string(key) + " " + std::string(value);
-        std::string response = send_command(cmd);
-
-        if (response.substr(0, 2) != "OK") {
-            throw std::runtime_error("PUT failed: " + response);
+        auto resp = execute({Command::Put, std::string(key), std::string(value), 0});
+        if(resp.status != Status::Ok) {
+            throw std::runtime_error("PUT failed: " + resp.data);
         }
     }
 
     void put(std::string_view key, std::string_view value, util::Duration ttl) {
-        std::string cmd = "PUTEX " + std::string(key) + " " + std::to_string(ttl.count()) + " " +
-                          std::string(value);
-        std::string response = send_command(cmd);
-
-        if (response.substr(0, 2) != "OK") {
-            throw std::runtime_error("PUT failed: " + response);
+        auto resp = execute({Command::PutEx, std::string(key), std::string(value), ttl.count()});
+        if (resp.status != Status::Ok) {
+            throw std::runtime_error("PUTEX failed: " + resp.data);
         }
     }
 
     [[nodiscard]] std::optional<std::string> get(std::string_view key) {
-        std::string cmd = "GET " + std::string(key);
-        std::string response = send_command(cmd);
-
-        if (response == "NOT_FOUND") {
+        auto resp = execute({Command::Get, std::string(key), "", 0});
+        if (resp.status == Status::NotFound) {
             return std::nullopt;
         }
-        if (response.substr(0, 3) == "OK ") {
-            return response.substr(3);
+        if (resp.status != Status::Ok) {
+            throw std::runtime_error("GET failed: " + resp.data);
         }
-
-        throw std::runtime_error("GET failed: " + response);
+        return resp.data;
     }
 
     [[nodiscard]] bool remove(std::string_view key) {
-        std::string cmd = "DEL " + std::string(key);
-        std::string response = send_command(cmd);
-
-        if (response == "OK") {
-            return true;
-        }
-        if (response == "NOT_FOUND") {
+        auto resp = execute({Command::Del, std::string(key), "", 0});
+        if(resp.status == Status::NotFound) {
             return false;
         }
-
-        throw std::runtime_error("DEL failed: " + response);
+        if(resp.status != Status::Ok){
+           throw std::runtime_error("DEL failed: " + resp.data);
+        }
+        return true;
     }
 
     [[nodiscard]] bool contains(std::string_view key) {
-        std::string cmd = "EXISTS " + std::string(key);
-        std::string response = send_command(cmd);
-
-        if (response == "OK 1") {
-            return true;
+        auto resp = execute({Command::Exists, std::string(key), "", 0});
+        if(resp.status != Status::Ok) {
+            throw std::runtime_error("EXISTS failed: " + resp.data);
         }
-        if (response == "OK 0") {
-            return false;
-        }
-
-        throw std::runtime_error("EXISTS failed: " + response);
+        return resp.data == "1";
     }
 
     [[nodiscard]] std::size_t size() {
-        std::string response = send_command("SIZE");
-
-        if (response.substr(0, 3) == "OK ") {
-            return std::stoull(response.substr(3));
+        auto resp = execute({Command::Size, "", "", 0});
+        if(resp.status != Status::Ok) {
+            throw std::runtime_error("SIZE failed: " + resp.data);
         }
-
-        throw std::runtime_error("SIZE failed: " + response);
+        return std::stoull(resp.data);
     }
 
     void clear() {
-        std::string response = send_command("CLEAR");
-
-        if (response != "OK") {
-            throw std::runtime_error("CLEAR failed: " + response);
+        auto resp = execute({Command::Clear, "", "", 0});
+        if(resp.status != Status::Ok) {
+            throw std::runtime_error("CLEAR failed: " + resp.data);
         }
     }
 
     [[nodiscard]] bool ping() {
         try {
-            std::string response = send_command("PING");
-            return response == "OK PONG";
+            auto resp = execute({Command::Ping, "", "", 0});
+            return resp.status == Status::Ok && resp.data == "PONG";
         } catch (...) {
             return false;
         }
     }
 
    private:
-    std::string send_command(const std::string& command) {
-        if (socket_fd_ < 0) {
-            throw std::runtime_error("not connected");
+    Response execute(const Request& req) {
+        if(socket_fd_ < 0) {
+            throw std::runtime_error("Not connected");
         }
 
-        std::string msg = command + "\n";
-        size_t total_sent = 0;
-
-        // we lop here until all bytes are sent
-        while (total_sent < msg.size()) {
-            // ssize_t : signed size type
-            ssize_t sent = send(socket_fd_, msg.c_str() + total_sent, msg.size() - total_sent, 0);
-            if (sent <= 0) {
-                disconnect();
-                throw std::runtime_error("failed to send command");
-            }
-            total_sent += sent;
+        if(!protocol_->write_request(socket_fd_, req)) {
+            disconnect();
+            throw std::runtime_error("failed to send request");
         }
-        return read_response();
-    }
 
-    std::string read_response() {
-        std::string response;
-        char c;
-
-        while (true) {
-            ssize_t n = recv(socket_fd_, &c, 1, 0);
-            if (n <= 0) {
-                disconnect();
-                throw std::runtime_error("failed to read response");
-            }
-            if (c == '\n') {
-                break;
-            }
-            response += c;
+        auto resp = protocol_->read_response(socket_fd_);
+        if(!resp) {
+            disconnect();
+            throw std::runtime_error("Failed to receive response");
         }
-        return response;
+
+        return *resp;
     }
 
     ClientOptions options_;
+    std::unique_ptr<IProtocolHandler> protocol_;
     int socket_fd_ = -1;
 };
 

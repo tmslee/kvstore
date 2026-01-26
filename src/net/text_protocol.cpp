@@ -7,16 +7,6 @@
 namespace kvstore::net {
 
 namespace {
-std::string trim(const std::string& str) {
-    const char* ws = " \t\r\n";
-    auto start = str.find_first_not_of(ws);
-    if (start == std::string::npos) {
-        return "";
-    }
-    auto end = str.find_last_not_of(ws);
-    return str.substr(start, end - start + 1);
-}
-
 std::string to_upper(std::string str) {
     std::transform(str.begin(), str.end(), str.begin(), ::toupper);
     return str;

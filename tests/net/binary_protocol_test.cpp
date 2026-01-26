@@ -70,8 +70,8 @@ TEST(BinaryProtocolTest, EncodeDecodePing) {
 }
 
 TEST(BinaryProtocolTest, EncodeDecodeResponseOk) {
-    BinaryResponse resp;
-    resp.status = BinaryStatus::Ok;
+    Response resp;
+    resp.status = Status::Ok;
     resp.data = "PONG";
 
     auto encoded = BinaryProtocol::encode_response(resp);
@@ -80,14 +80,14 @@ TEST(BinaryProtocolTest, EncodeDecodeResponseOk) {
     auto decoded = BinaryProtocol::decode_response(encoded, consumed);
 
     ASSERT_TRUE(decoded.has_value());
-    EXPECT_EQ(decoded->status, BinaryStatus::Ok);
+    EXPECT_EQ(decoded->status, Status::Ok);
     EXPECT_EQ(decoded->data, "PONG");
     EXPECT_FALSE(decoded->close_connection);
 }
 
 TEST(BinaryProtocolTest, EncodeDecodeResponseNotFound) {
-    BinaryResponse resp;
-    resp.status = BinaryStatus::NotFound;
+    Response resp;
+    resp.status = Status::NotFound;
 
     auto encoded = BinaryProtocol::encode_response(resp);
 
@@ -95,13 +95,13 @@ TEST(BinaryProtocolTest, EncodeDecodeResponseNotFound) {
     auto decoded = BinaryProtocol::decode_response(encoded, consumed);
 
     ASSERT_TRUE(decoded.has_value());
-    EXPECT_EQ(decoded->status, BinaryStatus::NotFound);
+    EXPECT_EQ(decoded->status, Status::NotFound);
     EXPECT_TRUE(decoded->data.empty());
 }
 
 TEST(BinaryProtocolTest, EncodeDecodeResponseBye) {
-    BinaryResponse resp;
-    resp.status = BinaryStatus::Bye;
+    Response resp;
+    resp.status = Status::Bye;
 
     auto encoded = BinaryProtocol::encode_response(resp);
 
@@ -109,7 +109,7 @@ TEST(BinaryProtocolTest, EncodeDecodeResponseBye) {
     auto decoded = BinaryProtocol::decode_response(encoded, consumed);
 
     ASSERT_TRUE(decoded.has_value());
-    EXPECT_EQ(decoded->status, BinaryStatus::Bye);
+    EXPECT_EQ(decoded->status, Status::Bye);
     EXPECT_TRUE(decoded->close_connection);
 }
 

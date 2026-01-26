@@ -14,15 +14,15 @@ class ClientTest : public ::testing::Test {
    protected:
     void SetUp() override {
         store_ = std::make_unique<core::Store>();
-        ServerOptions server_opts;
+        server::ServerOptions server_opts;
         server_opts.port = 16380;
-        server_ = std::make_unique<Server>(*store_, server_opts);
+        server_ = std::make_unique<server::Server>(*store_, server_opts);
         server_->start();
 
-        ClientOptions client_opts;
+        client::ClientOptions client_opts;
         client_opts.port = 16380;
         client_opts.timeout_seconds = 5;
-        client_ = std::make_unique<Client>(client_opts);
+        client_ = std::make_unique<client::Client>(client_opts);
         client_->connect();
     }
 
@@ -32,8 +32,8 @@ class ClientTest : public ::testing::Test {
     }
 
     std::unique_ptr<core::Store> store_;
-    std::unique_ptr<Server> server_;
-    std::unique_ptr<Client> client_;
+    std::unique_ptr<server::Server> server_;
+    std::unique_ptr<client::Client> client_;
 };
 
 TEST_F(ClientTest, Ping) {
@@ -158,15 +158,15 @@ class ClientDiskStoreTest : public ::testing::Test {
         store_opts.data_dir = test_dir_;
         store_ = std::make_unique<core::DiskStore>(store_opts);
 
-        ServerOptions server_opts;
+        server::ServerOptions server_opts;
         server_opts.port = 16381;
-        server_ = std::make_unique<Server>(*store_, server_opts);
+        server_ = std::make_unique<server::Server>(*store_, server_opts);
         server_->start();
 
-        ClientOptions client_opts;
+        client::ClientOptions client_opts;
         client_opts.port = 16381;
         client_opts.timeout_seconds = 5;
-        client_ = std::make_unique<Client>(client_opts);
+        client_ = std::make_unique<client::Client>(client_opts);
         client_->connect();
     }
 
@@ -179,8 +179,8 @@ class ClientDiskStoreTest : public ::testing::Test {
 
     std::filesystem::path test_dir_;
     std::unique_ptr<core::DiskStore> store_;
-    std::unique_ptr<Server> server_;
-    std::unique_ptr<Client> client_;
+    std::unique_ptr<server::Server> server_;
+    std::unique_ptr<client::Client> client_;
 };
 
 TEST_F(ClientDiskStoreTest, Ping) {
