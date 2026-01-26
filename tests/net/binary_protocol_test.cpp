@@ -5,8 +5,8 @@
 namespace kvstore::net::test {
 
 TEST(BinaryProtocolTest, EncodeDecodeGet) {
-    BinaryRequest req;
-    req.command = BinaryCommand::Get;
+    Request req;
+    req.command = Command::Get;
     req.key = "mykey";
 
     auto encoded = BinaryProtocol::encode_request(req);
@@ -15,14 +15,14 @@ TEST(BinaryProtocolTest, EncodeDecodeGet) {
     auto decoded = BinaryProtocol::decode_request(encoded, consumed);
 
     ASSERT_TRUE(decoded.has_value());
-    EXPECT_EQ(decoded->command, BinaryCommand::Get);
+    EXPECT_EQ(decoded->command, Command::Get);
     EXPECT_EQ(decoded->key, "mykey");
     EXPECT_EQ(consumed, encoded.size());
 }
 
 TEST(BinaryProtocolTest, EncodeDecodePut) {
-    BinaryRequest req;
-    req.command = BinaryCommand::Put;
+    Request req;
+    req.command = Command::Put;
     req.key = "mykey";
     req.value = "myvalue";
 
@@ -32,14 +32,14 @@ TEST(BinaryProtocolTest, EncodeDecodePut) {
     auto decoded = BinaryProtocol::decode_request(encoded, consumed);
 
     ASSERT_TRUE(decoded.has_value());
-    EXPECT_EQ(decoded->command, BinaryCommand::Put);
+    EXPECT_EQ(decoded->command, Command::Put);
     EXPECT_EQ(decoded->key, "mykey");
     EXPECT_EQ(decoded->value, "myvalue");
 }
 
 TEST(BinaryProtocolTest, EncodeDecodePutEx) {
-    BinaryRequest req;
-    req.command = BinaryCommand::PutEx;
+    Request req;
+    req.command = Command::PutEx;
     req.key = "mykey";
     req.value = "myvalue";
     req.ttl_ms = 60000;
@@ -50,15 +50,15 @@ TEST(BinaryProtocolTest, EncodeDecodePutEx) {
     auto decoded = BinaryProtocol::decode_request(encoded, consumed);
 
     ASSERT_TRUE(decoded.has_value());
-    EXPECT_EQ(decoded->command, BinaryCommand::PutEx);
+    EXPECT_EQ(decoded->command, Command::PutEx);
     EXPECT_EQ(decoded->key, "mykey");
     EXPECT_EQ(decoded->value, "myvalue");
     EXPECT_EQ(decoded->ttl_ms, 60000);
 }
 
 TEST(BinaryProtocolTest, EncodeDecodePing) {
-    BinaryRequest req;
-    req.command = BinaryCommand::Ping;
+    Request req;
+    req.command = Command::Ping;
 
     auto encoded = BinaryProtocol::encode_request(req);
 
@@ -66,7 +66,7 @@ TEST(BinaryProtocolTest, EncodeDecodePing) {
     auto decoded = BinaryProtocol::decode_request(encoded, consumed);
 
     ASSERT_TRUE(decoded.has_value());
-    EXPECT_EQ(decoded->command, BinaryCommand::Ping);
+    EXPECT_EQ(decoded->command, Command::Ping);
 }
 
 TEST(BinaryProtocolTest, EncodeDecodeResponseOk) {
@@ -114,8 +114,8 @@ TEST(BinaryProtocolTest, EncodeDecodeResponseBye) {
 }
 
 TEST(BinaryProtocolTest, IncompleteMessage) {
-    BinaryRequest req;
-    req.command = BinaryCommand::Get;
+    Request req;
+    req.command = Command::Get;
     req.key = "mykey";
 
     auto encoded = BinaryProtocol::encode_request(req);
@@ -130,8 +130,8 @@ TEST(BinaryProtocolTest, IncompleteMessage) {
 }
 
 TEST(BinaryProtocolTest, HasCompleteMessage) {
-    BinaryRequest req;
-    req.command = BinaryCommand::Ping;
+    Request req;
+    req.command = Command::Ping;
 
     auto encoded = BinaryProtocol::encode_request(req);
 
@@ -142,11 +142,11 @@ TEST(BinaryProtocolTest, HasCompleteMessage) {
 }
 
 TEST(BinaryProtocolTest, MultipleMessagesInBuffer) {
-    BinaryRequest req1;
-    req1.command = BinaryCommand::Ping;
+    Request req1;
+    req1.command = Command::Ping;
 
-    BinaryRequest req2;
-    req2.command = BinaryCommand::Get;
+    Request req2;
+    req2.command = Command::Get;
     req2.key = "testkey";
 
     auto encoded1 = BinaryProtocol::encode_request(req1);
@@ -159,20 +159,20 @@ TEST(BinaryProtocolTest, MultipleMessagesInBuffer) {
     size_t consumed1 = 0;
     auto decoded1 = BinaryProtocol::decode_request(combined, consumed1);
     ASSERT_TRUE(decoded1.has_value());
-    EXPECT_EQ(decoded1->command, BinaryCommand::Ping);
+    EXPECT_EQ(decoded1->command, Command::Ping);
 
     std::vector<uint8_t> remaining(combined.begin() + consumed1, combined.end());
 
     size_t consumed2 = 0;
     auto decoded2 = BinaryProtocol::decode_request(remaining, consumed2);
     ASSERT_TRUE(decoded2.has_value());
-    EXPECT_EQ(decoded2->command, BinaryCommand::Get);
+    EXPECT_EQ(decoded2->command, Command::Get);
     EXPECT_EQ(decoded2->key, "testkey");
 }
 
 TEST(BinaryProtocolTest, BinaryDataInValue) {
-    BinaryRequest req;
-    req.command = BinaryCommand::Put;
+    Request req;
+    req.command = Command::Put;
     req.key = "binkey";
     req.value = std::string("\x00\x01\x02\xFF\xFE", 5);
 

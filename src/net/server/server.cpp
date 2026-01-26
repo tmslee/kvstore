@@ -1,4 +1,4 @@
-#include "kvstore/net/server/server.hpp"
+#include "kvstore/net/server.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>

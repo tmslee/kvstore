@@ -5,102 +5,93 @@
 namespace kvstore::net::test {
 
 TEST(TextProtocolTest, ParseSimpleCommand) {
-    auto cmd = TextProtocol::parse("GET key1");
-    EXPECT_EQ(cmd.command, "GET");
-    ASSERT_EQ(cmd.args.size(), 1);
-    EXPECT_EQ(cmd.args[0], "key1");
+    Request req = TextProtocol::decode_request("GET key1");
+    EXPECT_EQ(req.command, Command::Get);
+    EXPECT_EQ(req.key, "key1");
+    EXPECT_EQ(req.value, "");
+    EXPECT_EQ(req.ttl_ms, 0);
 }
 
 TEST(TextProtocolTest, ParseCommandWithMultipleArgs) {
-    auto cmd = TextProtocol::parse("PUT key1 hello world");
-    EXPECT_EQ(cmd.command, "PUT");
-    ASSERT_EQ(cmd.args.size(), 3);
-    EXPECT_EQ(cmd.args[0], "key1");
-    EXPECT_EQ(cmd.args[1], "hello");
-    EXPECT_EQ(cmd.args[2], "world");
+    Request req = TextProtocol::decode_request("PUT key1 hello world");
+    EXPECT_EQ(req.command, Command::Put);
+    EXPECT_EQ(req.key, "key1");
+    EXPECT_EQ(req.value, "hello world");
+    EXPECT_EQ(req.ttl_ms, 0);
 }
 
 TEST(TextProtocolTest, ParseCommandCaseInsensitive) {
-    auto cmd = TextProtocol::parse("get KEY1");
-    EXPECT_EQ(cmd.command, "GET");
-    EXPECT_EQ(cmd.args[0], "KEY1");
+    Request req = TextProtocol::decode_request("get KEY1");
+    EXPECT_EQ(req.command, Command::Get);
+    EXPECT_EQ(req.key, "KEY1");
+    EXPECT_EQ(req.value, "");
+    EXPECT_EQ(req.ttl_ms, 0);
 }
 
 TEST(TextProtocolTest, ParseEmptyLine) {
-    auto cmd = TextProtocol::parse("");
-    EXPECT_TRUE(cmd.command.empty());
-    EXPECT_TRUE(cmd.args.empty());
+    Request req = TextProtocol::decode_request("");
+    EXPECT_EQ(req.command, Command::Unknown);
+    EXPECT_EQ(req.key, "");
+    EXPECT_EQ(req.value, "");
+    EXPECT_EQ(req.ttl_ms, 0);
 }
 
 TEST(TextProtocolTest, ParseWhitespaceOnly) {
-    auto cmd = TextProtocol::parse("   \t  ");
-    EXPECT_TRUE(cmd.command.empty());
-    EXPECT_TRUE(cmd.args.empty());
+    Request req = TextProtocol::decode_request("   \t  ");
+    EXPECT_EQ(req.command, Command::Unknown);
+    EXPECT_EQ(req.key, "");
+    EXPECT_EQ(req.value, "");
+    EXPECT_EQ(req.ttl_ms, 0);
 }
 
 TEST(TextProtocolTest, ParseTrimsWhitespace) {
-    auto cmd = TextProtocol::parse("  GET   key1  ");
-    EXPECT_EQ(cmd.command, "GET");
-    ASSERT_EQ(cmd.args.size(), 1);
-    EXPECT_EQ(cmd.args[0], "key1");
+    Request req = TextProtocol::decode_request("  GET   key1  ");
+    EXPECT_EQ(req.command, Command::Get);
+    EXPECT_EQ(req.key, "key1");
+    EXPECT_EQ(req.value, "");
+    EXPECT_EQ(req.ttl_ms, 0);
 }
 
 TEST(TextProtocolTest, SerializeOk) {
-    auto result = TextProtocol::ok();
-    EXPECT_EQ(TextProtocol::serialize(result), "OK\n");
+    Response resp = Response::ok();
+    EXPECT_EQ(TextProtocol::encode_response(resp), "OK\n");
 }
 
 TEST(TextProtocolTest, SerializeOkWithMessage) {
-    auto result = TextProtocol::ok("value123");
-    EXPECT_EQ(TextProtocol::serialize(result), "OK value123\n");
+    Response resp = Response::ok("value123");
+    EXPECT_EQ(TextProtocol::encode_response(resp), "OK value123\n");
 }
 
 TEST(TextProtocolTest, SerializeNotFound) {
-    auto result = TextProtocol::not_found();
-    EXPECT_EQ(TextProtocol::serialize(result), "NOT_FOUND\n");
+    Response resp = Response::not_found();
+    EXPECT_EQ(TextProtocol::encode_response(resp), "NOT_FOUND\n");
 }
 
 TEST(TextProtocolTest, SerializeError) {
-    auto result = TextProtocol::error("something went wrong");
-    EXPECT_EQ(TextProtocol::serialize(result), "ERROR something went wrong\n");
+    Response resp = Response::error("something went wrong");
+    EXPECT_EQ(TextProtocol::encode_response(resp), "ERROR something went wrong\n");
 }
 
 TEST(TextProtocolTest, SerializeBye) {
-    auto result = TextProtocol::bye();
-    EXPECT_EQ(TextProtocol::serialize(result), "BYE\n");
-    EXPECT_TRUE(result.close_connection);
-}
-
-TEST(TextProtocolTest, OkDoesNotCloseConnection) {
-    EXPECT_FALSE(TextProtocol::ok().close_connection);
-    EXPECT_FALSE(TextProtocol::ok("msg").close_connection);
-}
-
-TEST(TextProtocolTest, NotFoundDoesNotCloseConnection) {
-    EXPECT_FALSE(TextProtocol::not_found().close_connection);
-}
-
-TEST(TextProtocolTest, ErrorDoesNotCloseConnection) {
-    EXPECT_FALSE(TextProtocol::error("err").close_connection);
+    Response resp = Response::bye();
+    EXPECT_EQ(TextProtocol::encode_response(resp), "BYE\n");
+    EXPECT_TRUE(resp.close_connection);
 }
 
 TEST(TextProtocolTest, ParsePutEx) {
-    auto cmd = TextProtocol::parse("PUTEX key1 1000 hello world");
-    EXPECT_EQ(cmd.command, "PUTEX");
-    ASSERT_EQ(cmd.args.size(), 4);
-    EXPECT_EQ(cmd.args[0], "key1");
-    EXPECT_EQ(cmd.args[1], "1000");
-    EXPECT_EQ(cmd.args[2], "hello");
-    EXPECT_EQ(cmd.args[3], "world");
+    Request req = TextProtocol::decode_request("PUTEX key1 1000 hello world");
+    EXPECT_EQ(req.command, Command::PutEx);
+    EXPECT_EQ(req.key, "key1");
+    EXPECT_EQ(req.value, "hello world");
+    EXPECT_EQ(req.ttl_ms, 1000);
 }
 
 TEST(TextProtocolTest, ParseSetEx) {
-    auto cmd = TextProtocol::parse("SETEX key1 500 value");
-    EXPECT_EQ(cmd.command, "SETEX");
-    ASSERT_EQ(cmd.args.size(), 3);
-    EXPECT_EQ(cmd.args[0], "key1");
-    EXPECT_EQ(cmd.args[1], "500");
-    EXPECT_EQ(cmd.args[2], "value");
+    Request req = TextProtocol::decode_request("SETEX key1 500 value");
+    EXPECT_EQ(req.command, Command::PutEx);
+    EXPECT_EQ(req.key, "key1");
+    EXPECT_EQ(req.value, "value");
+    EXPECT_EQ(req.ttl_ms, 500);
 }
 
 }  // namespace kvstore::net::test

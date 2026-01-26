@@ -1,4 +1,5 @@
 #include "kvstore/net/binary_protocol.hpp"
+#include "kvstore/util/binary_io.hpp"
 
 #include <cstring>
 #include <stdexcept>
@@ -79,9 +80,8 @@ std::string read_string(const uint8_t* data, size_t& offset, size_t max_size) {
 
 }  // namespace
 
-std::vector<uint8_t> BinaryProtocol::encode_request(const BinaryRequest& req) {
+std::vector<uint8_t> BinaryProtocol::encode_request(const Request& req) {
     std::vector<uint8_t> payload;
-
     payload.push_back(static_cast<uint8_t>(req.command));  // 1 byte command
 
     switch (req.command) {
@@ -118,7 +118,7 @@ std::vector<uint8_t> BinaryProtocol::encode_request(const BinaryRequest& req) {
     return result;
 }
 
-std::optional<BinaryRequest> BinaryProtocol::decode_request(const std::vector<uint8_t>& data,
+std::optional<Request> BinaryProtocol::decode_request(const std::vector<uint8_t>& data,
                                                             size_t& bytes_consumed) {
     // need atleast 4 bytes for length
     if (data.size() < 4) {
@@ -138,7 +138,7 @@ std::optional<BinaryRequest> BinaryProtocol::decode_request(const std::vector<ui
         throw std::runtime_error("Empty message");
     }
 
-    BinaryRequest req;
+    Request req;
     // get request command from first byte
     req.command = static_cast<BinaryCommand>(data[4]);
 
@@ -181,7 +181,7 @@ std::optional<BinaryRequest> BinaryProtocol::decode_request(const std::vector<ui
     return req;
 }
 
-std::vector<uint8_t> BinaryProtocol::encode_response(const BinaryResponse& resp) {
+std::vector<uint8_t> BinaryProtocol::encode_response(const Response& resp) {
     std::vector<uint8_t> payload;
 
     // 1 bytes status
@@ -199,7 +199,7 @@ std::vector<uint8_t> BinaryProtocol::encode_response(const BinaryResponse& resp)
     return result;
 }
 
-std::optional<BinaryResponse> BinaryProtocol::decode_response(const std::vector<uint8_t>& data,
+std::optional<Response> BinaryProtocol::decode_response(const std::vector<uint8_t>& data,
                                                               size_t& bytes_consumed) {
     if (data.size() < 4) {
         return std::nullopt;
@@ -219,8 +219,8 @@ std::optional<BinaryResponse> BinaryProtocol::decode_response(const std::vector<
 
     BinaryResponse resp;
     // response status is first byte after length
-    resp.status = static_cast<BinaryStatus>(data[4]);
-    resp.close_connection = (resp.status == BinaryStatus::Bye);
+    resp.status = static_cast<Status>(data[4]);
+    resp.close_connection = (resp.status == Status::Bye);
 
     // read the rest of the payload (optional string data)
     if (msg_len > 1) {

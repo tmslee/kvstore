@@ -9,59 +9,6 @@
 
 namespace kvstore::net {
 
-// protocol-agnostic command types
-enum class Command {
-    Get,
-    Put,
-    PutEx,
-    Del,
-    Exists,
-    Size,
-    Clear,
-    Ping,
-    Quit,
-    Unknown,
-};
-
-// protocol-agnostic status types
-enum class Status {
-    Ok,
-    NotFound,
-    Error,
-    Bye,
-};
-
-// protocol-agnostic request
-struct Request {
-    Command command = Command::Unknown;
-    std::string key;
-    std::string value;
-    int64_t ttl_ms = 0;
-};
-
-// protocol-agnostic response
-struct Response {
-    Status status = Status::Ok;
-    std::string data;
-    bool close_connection = false;
-
-    static Response ok(const std::string& data = "") {
-        return {Status::Ok, data, false};
-    }
-
-    static Response not_found() {
-        return {Status::NotFound, "", false};
-    }
-
-    static Rresponse error(const std::string& msg) {
-        return {Status::Error, msg, false};
-    }
-
-    static Response bye() {
-        return {STatus::Bye, "", true};
-    }
-};
-
 //abstract protocol handler interface
 class IProtocolHandler {
 public:
