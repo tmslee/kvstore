@@ -14,7 +14,7 @@
 #include <thread>
 #include <vector>
 
-#include "kvstore/net/protocol.hpp"
+#include "kvstore/net/text_protocol.hpp"
 #include "kvstore/util/logger.hpp"
 #include "kvstore/util/types.hpp"
 
@@ -311,16 +311,16 @@ class Server::Impl {
 
                     // append newline so client can recognize end of response
                     CommandResult result;
-                    // catch any exceptions and return as Protocol::error
+                    // catch any exceptions and return as TextProtocol::error
                     try {
                         result = process_command(line);
                     } catch (const std::exception& e) {
-                        result = Protocol::error(std::string("internal error: ") + e.what());
+                        result = TextProtocol::error(std::string("internal error: ") + e.what());
                     } catch (...) {
-                        result = Protocol::error("internal error");
+                        result = TextProtocol::error("internal error");
                     }
 
-                    std::string response = Protocol::serialize(result);
+                    std::string response = TextProtocol::serialize(result);
 
                     // send failed
                     if (!send_all(client_fd, response)) {
@@ -368,28 +368,28 @@ class Server::Impl {
     }
 
     /*
-        note: we use Protocol::error() when client did something wrong. we tell them
+        note: we use TextProtocol::error() when client did something wrong. we tell them
         std::cerr is used for internal issues. we log for operations
     */
     CommandResult process_command(const std::string& line) {
-        ParsedCommand cmd = Protocol::parse(line);
+        ParsedCommand cmd = TextProtocol::parse(line);
         if (cmd.command.empty()) {
-            return Protocol::error("empty command");
+            return TextProtocol::error("empty command");
         }
 
         if (cmd.command == "GET") {
             if (cmd.args.size() != 1) {
-                return Protocol::error("usage: GET key");
+                return TextProtocol::error("usage: GET key");
             }
             auto result = store_.get(cmd.args[0]);
             if (result.has_value()) {
-                return Protocol::ok(*result);
+                return TextProtocol::ok(*result);
             }
-            return Protocol::not_found();
+            return TextProtocol::not_found();
 
         } else if (cmd.command == "PUT" || cmd.command == "SET") {
             if (cmd.args.size() < 2) {
-                return Protocol::error("usage: PUT key value");
+                return TextProtocol::error("usage: PUT key value");
             }
             std::string value;
             for (size_t i = 1; i < cmd.args.size(); ++i) {
@@ -398,11 +398,11 @@ class Server::Impl {
                 value += cmd.args[i];
             }
             store_.put(cmd.args[0], value);
-            return Protocol::ok();
+            return TextProtocol::ok();
 
         } else if (cmd.command == "PUTEX" || cmd.command == "SETEX") {
             if (cmd.args.size() < 3) {
-                return Protocol::error("usage: PUTEX key milliseconds value");
+                return TextProtocol::error("usage: PUTEX key milliseconds value");
             }
             auto ttl = util::Duration(std::stoll(cmd.args[1]));
             std::string value;
@@ -412,41 +412,41 @@ class Server::Impl {
                 value += cmd.args[i];
             }
             store_.put(cmd.args[0], value, ttl);
-            return Protocol::ok();
+            return TextProtocol::ok();
 
         } else if (cmd.command == "DEL" || cmd.command == "DELETE" || cmd.command == "REMOVE") {
             if (cmd.args.size() != 1) {
-                return Protocol::error("usage: DEL key");
+                return TextProtocol::error("usage: DEL key");
             }
             if (store_.remove(cmd.args[0])) {
-                return Protocol::ok();
+                return TextProtocol::ok();
             }
-            return Protocol::not_found();
+            return TextProtocol::not_found();
 
         } else if (cmd.command == "EXISTS" || cmd.command == "CONTAINS") {
             if (cmd.args.size() != 1) {
-                return Protocol::error("usage: EXISTS key");
+                return TextProtocol::error("usage: EXISTS key");
             }
             if (store_.contains(cmd.args[0])) {
-                return Protocol::ok("1");
+                return TextProtocol::ok("1");
             }
-            return Protocol::ok("0");
+            return TextProtocol::ok("0");
 
         } else if (cmd.command == "SIZE" || cmd.command == "COUNT") {
-            return Protocol::ok(std::to_string(store_.size()));
+            return TextProtocol::ok(std::to_string(store_.size()));
 
         } else if (cmd.command == "CLEAR") {
             store_.clear();
-            return Protocol::ok();
+            return TextProtocol::ok();
 
         } else if (cmd.command == "PING") {
-            return Protocol::ok("PONG");
+            return TextProtocol::ok("PONG");
 
         } else if (cmd.command == "QUIT" || cmd.command == "EXIT") {
-            return Protocol::bye();
+            return TextProtocol::bye();
         }
 
-        return Protocol::error("unkown command: " + cmd.command);
+        return TextProtocol::error("unkown command: " + cmd.command);
     }
 
     core::IStore& store_;

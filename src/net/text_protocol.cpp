@@ -1,4 +1,4 @@
-#include "kvstore/net/protocol.hpp"
+#include "kvstore/net/text_protocol.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -23,7 +23,7 @@ std::string to_upper(std::string str) {
 
 }  // namespace
 
-ParsedCommand Protocol::parse(const std::string& line) {
+ParsedCommand TextProtocol::parse(const std::string& line) {
     ParsedCommand result;
     std::istringstream iss(trim(line));
 
@@ -37,7 +37,7 @@ ParsedCommand Protocol::parse(const std::string& line) {
     return result;
 }
 
-std::string Protocol::serialize(const CommandResult& result) {
+std::string TextProtocol::serialize(const CommandResult& result) {
     std::string output;
     switch (result.status) {
         case StatusCode::Ok:
@@ -60,23 +60,23 @@ std::string Protocol::serialize(const CommandResult& result) {
     return output;
 }
 
-CommandResult Protocol::ok() {
+CommandResult TextProtocol::ok() {
     return {StatusCode::Ok, "", false};
 }
 
-CommandResult Protocol::ok(const std::string& message) {
+CommandResult TextProtocol::ok(const std::string& message) {
     return {StatusCode::Ok, message, false};
 }
 
-CommandResult Protocol::not_found() {
+CommandResult TextProtocol::not_found() {
     return {StatusCode::NotFound, "", false};
 }
 
-CommandResult Protocol::error(const std::string& message) {
+CommandResult TextProtocol::error(const std::string& message) {
     return {StatusCode::Error, message, false};
 }
 
-CommandResult Protocol::bye() {
+CommandResult TextProtocol::bye() {
     return {StatusCode::Bye, "", true};
 }
 

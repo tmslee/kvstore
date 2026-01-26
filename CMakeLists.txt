@@ -44,7 +44,7 @@ target_sources(kvstore
         src/core/store.cpp
         src/core/wal.cpp
         src/net/server.cpp
-        src/net/protocol.cpp
+        src/net/text_protocol.cpp
         src/net/client.cpp
         src/core/snapshot.cpp
         src/core/disk_store.cpp

@@ -1,5 +1,5 @@
-#ifndef KVSTORE_NET_PROTOCOL_HPP
-#define KVSTORE_NET_PROTOCOL_HPP
+#ifndef KVSTORE_NET_TEXT_PROTOCOL_HPP
+#define KVSTORE_NET_TEXT_PROTOCOL_HPP
 
 #include <string>
 #include <vector>
@@ -24,7 +24,7 @@ struct ParsedCommand {
     std::vector<std::string> args;
 };
 
-class Protocol {
+class TextProtocol {
    public:
     // static functions - no per-instance data (no member variables)
     // essentially namespaced functions that live inside a class

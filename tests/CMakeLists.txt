@@ -25,10 +25,10 @@ target_link_libraries(server_test
         GTest::gtest_main
 )
 
-add_executable(protocol_test
-    net/protocol_test.cpp
+add_executable(text_protocol_test
+    net/text_protocol_test.cpp
 )
-target_link_libraries(protocol_test
+target_link_libraries(text_protocol_test
     PRIVATE
         kvstore
         GTest::gtest_main
@@ -120,7 +120,7 @@ if(ENABLE_ASAN OR ENABLE_TSAN OR ENABLE_UBSAN)
     add_test(NAME store_test COMMAND store_test)
     add_test(NAME wal_test COMMAND wal_test)
     add_test(NAME server_test COMMAND server_test)
-    add_test(NAME protocol_test COMMAND protocol_test)
+    add_test(NAME text_protocol_test COMMAND text_protocol_test)
     add_test(NAME client_test COMMAND client_test)
     add_test(NAME snapshot_test COMMAND snapshot_test)
     add_test(NAME ttl_test COMMAND ttl_test)
@@ -136,7 +136,7 @@ else()
     gtest_discover_tests(store_test)
     gtest_discover_tests(wal_test)
     gtest_discover_tests(server_test)
-    gtest_discover_tests(protocol_test)
+    gtest_discover_tests( text_protocol_test)
     gtest_discover_tests(client_test)
     gtest_discover_tests(snapshot_test)
     gtest_discover_tests(ttl_test)
