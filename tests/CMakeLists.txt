@@ -17,7 +17,7 @@ target_link_libraries(wal_test
 )
 
 add_executable(server_test
-    net/server_test.cpp
+    net/server/server_test.cpp
 )
 target_link_libraries(server_test
     PRIVATE
@@ -35,7 +35,7 @@ target_link_libraries(text_protocol_test
 )
 
 add_executable(client_test
-    net/client_test.cpp
+    net/client/client_test.cpp
 )
 target_link_libraries(client_test
     PRIVATE

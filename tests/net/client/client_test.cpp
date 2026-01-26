@@ -1,4 +1,4 @@
-#include "kvstore/net/client.hpp"
+#include "kvstore/net/client/client.hpp"
 
 #include <gtest/gtest.h>
 
@@ -6,7 +6,7 @@
 
 #include "kvstore/core/disk_store.hpp"
 #include "kvstore/core/store.hpp"
-#include "kvstore/net/server.hpp"
+#include "kvstore/net/server/server.hpp"
 
 namespace kvstore::net::test {
 

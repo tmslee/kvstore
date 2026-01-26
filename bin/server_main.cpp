@@ -2,7 +2,7 @@
 
 #include "kvstore/core/store.hpp"
 #include "kvstore/core/disk_store.hpp"
-#include "kvstore/net/server.hpp"
+#include "kvstore/net/server/server.hpp"
 #include "kvstore/util/signal_handler.hpp"
 #include "kvstore/util/logger.hpp"
 #include "kvstore/util/config.hpp"

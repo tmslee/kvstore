@@ -43,9 +43,9 @@ target_sources(kvstore
     PRIVATE
         src/core/store.cpp
         src/core/wal.cpp
-        src/net/server.cpp
+        src/net/server/server.cpp
         src/net/text_protocol.cpp
-        src/net/client.cpp
+        src/net/client/client.cpp
         src/core/snapshot.cpp
         src/core/disk_store.cpp
         src/util/signal_handler.cpp
