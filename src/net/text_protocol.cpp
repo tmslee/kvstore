@@ -83,7 +83,7 @@ Request TextProtocol::decode_request(const std::string& line) {
         case Command::Get:
         case Command::Del:
         case Command::Exists:
-            if(args.empty()) {
+            if (args.empty()) {
                 req.command = Command::Unknown;
             } else {
                 req.key = args[0];
@@ -91,7 +91,7 @@ Request TextProtocol::decode_request(const std::string& line) {
             break;
 
         case Command::Put:
-            if(args.size() < 2) {
+            if (args.size() < 2) {
                 req.command = Command::Unknown;
             } else {
                 req.key = args[0];
@@ -104,14 +104,14 @@ Request TextProtocol::decode_request(const std::string& line) {
             break;
 
         case Command::PutEx:
-            if(args.size() < 3) {
+            if (args.size() < 3) {
                 req.command = Command::Unknown;
             } else {
                 req.key = args[0];
                 try {
                     req.ttl_ms = std::stoll(args[1]);
                 } catch (const std::exception&) {
-                    req.command = Command::Unknown; //invalid TTL
+                    req.command = Command::Unknown;  // invalid TTL
                     break;
                 }
                 for (size_t i = 2; i < args.size(); ++i) {
