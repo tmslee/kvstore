@@ -1,254 +1,334 @@
+#include "benchmark.hpp"
 #include "kvstore/core/store.hpp"
 #include "kvstore/core/disk_store.hpp"
 #include "kvstore/net/server/server.hpp"
 #include "kvstore/net/client/client.hpp"
 
+#include <filesystem>
+#include <iostream>
+#include <thread>
+#include <vector>
+
 using namespace kvstore;
+using namespace kvstore::bench;
 
-struct BenchmarkResult {
-    std::string name;
-    size_t operations;
-    double total_seconds;
-    double ops_per_second;
-    double avg_latency_us;
-};
-
-struct LatencyResult {
-    std::string name;
-    size_t operations;
-    double p50_us;
-    double p90_us;
-    double p99_us;
-    double p999_us;
-    double max_us;
-}
-
-struct MultiThreadResult {
-    std::string name;
-    size_t num_threads;
-    size_t total_operations;
-    double total_seconds;
-    double ops_per_second;
-};
-
-void print_result(const BenchmarkResult& result) {
-    std::cout << std::left << std::setw(40) << result.name
-              << std::right << std::setw(10) << result.operations << " ops"
-              << std::setw(12) << std::fixed << std::setprecision(2) << result.total_seconds << " s"
-              << std::setw(12) << std::fixed << std::setprecision(0) << result.ops_per_second << " ops/s"
-              << std::setw(10) << std::fixed << std::setprecision(2) << result.avg_latency_us << " us"
-              << std::endl;
-}
-
-void print_latency(const LatencyResult& result) {
-    std::cout << std::left << std::setw(45) << result.name
-              << std::right
-              << "  p50=" << std::setw(8) << std::fixed << std::setprecision(2) << result.p50_us << " us"
-              << "  p90=" << std::setw(8) << std::fixed << std::setprecision(2) << result.p90_us << " us"
-              << "  p99=" << std::setw(8) << std::fixed << std::setprecision(2) << result.p99_us << " us"
-              << "  p99.9=" << std::setw(8) << std::fixed << std::setprecision(2) << result.p999_us << " us"
-              << "  max=" << std::setw(8) << std::fixed << std::setprecision(2) << result.max_us << " us"
-              << std::endl;
-}
-
-void print_multithread(const MultiThreadResult& result){
-    std::cout << std::left << std::setw(45) << result.name
-              << std::right
-              << "  threads=" << std::setw(2) << result.num_threads
-              << "  ops=" << std::setw(10) << result.total_operations
-              << "  time=" << std::setw(8) << std::fixed << std::setprecision(2) << result.total_seconds << " s"
-              << "  throughput=" << std::setw(10) << std::fixed << std::setprecision(0) << result.ops_per_second << " ops/s"
-              << std::endl;
-}
-
-std::string random_string(size_t length, std::mt19937& rng) {
-    static const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    std::uniform_int_distribution<size_t> dist(0, sizeof(charset) - 2);
-    std::string result(length, '\0');
-    for(size_t i=0; i<length; ++i) {
-        result[i] = charset[dist(rng)];
-    }
-    return result;
-}
-
-double percentile(std::vector<double>&latencies, double p) {
-    if(latencies.empty()) return 0.0;
-    size_t idx = static_cast<size_t>(p*latencies.size());
-    if(idx >= latencies.size()) idx = latencies.size() - 1;
-    return latencies[idx];
-}
-
+//=========================================================================================
+// store benchmarks
 // =========================================================================================
-// store benchmarks (direct, no network)
-// =========================================================================================
+void bench_store(core::Istore& store, const std::string& store_name, size_t ops){
+    print_header(store_name);
 
-BenchmarkResult bench_store_put(core::Store& store, size_t count, size_t key_size, size_t value_size) {
-    std::mt19937 rng(42);
-    std::vector<std::string> keys;
-    std::vector<std::string> values;
-
-    keys.reserve(count);
-    values.reserve(count);
-    for(size_t i=0; i<count; ++i) {
-        keys.push_back(random_string(key_size, rng));
-        values.push_back(random_string(value_size, rng));
+    //PUT small values
+    {
+        DataSet data(ops, 16, 64);
+        size_t i = 0;
+        Benchmark("put (key=16, val=64)")
+            .run_throughput(ops, [&]() {
+                store.put(data.key(i), data.value(i)); 
+                ++i;
+            })
+            .print();
+        store.clear();
     }
 
-    auto start = Clock::now();
-    for(size_t i=0; i < count; ++i) {
-        store.put(keys[i], values[i]);
-    }
-    auto end = Clock::now();
-
-    double seconds = std::chrono::duration<double>(end-start).count();
-    return {
-        "Store::put (key=" + std::to_string(key_size) + ", val=" + std::to_string(value_size) + ")",
-        count,
-        seconds,
-        count/seconds,
-        (seconds*1'000'000)/count
-    };
-}
-
-BenchmarkResult bench_store_get(core::Store& store, size_t count) {
-    auto start = Clock::now();
-    for(size_t i=0; i<count; ++i) {
-        store.get("key"+std::to_string(i%store.size()));
-    }
-    auto end = Clock::now();
-
-    double seconds = std::chrono::duration<double>(end-start).count();
-    return {
-        "Store::get",
-        count,
-        seconds,
-        count/seconds,
-        (seconds*1'000'000)/count
-    };
-}
-
-BenchmarkResult bench_store_mixed(core::Store&store, size_t count, double read_ratio) {
-    std::mt19937 rng(42);
-    std::uniform_real_distribution<double> ratio_dist(0.0, 1.0);
-    std::uniform_int_distribution<size_t> key_dist(0, count-1);
-
-    // populate
-    for(size_t i=0; i<count; ++i){
-        store.put("key"+std::to_string(i), "value"+std::to_string(i));
+    //PUT large values
+    {
+        DataSet data(ops, 16, 1024);
+        size_t i = 0;
+        Benchmark("put (key=16, val=1024)")
+            .run_throughput(ops, [&](){
+                store.put(data.key(i), data.value(i));
+                ++i;
+            })
+            .print();
+        store.clear();
     }
 
-    auto start = Clock::now();
-    for(size_t i=0; i<count; ++i) {
-        if(ratio_dist(rng) < read_ratio) {
-            store.get("key" + std::to_string(key_dist(rng)));
-        } else {
-            store.put("key" + std::to_string(key_dist(rng)), "newvalue");
+    //GET
+    {
+        for(size_t i=0; i<ops; ++i) {
+            store.put("key" + std::to_string(i), "value" + std::to_string(i));
         }
+        size_t i = 0;
+        Benchmark("get")
+            .run_throughput(ops, [&]() {
+                store.get("key" + std::to_string(i % ops));
+                ++i;
+            });
+            .print();
+        store.clear();
+    }
+
+    // mixed workload
+    {
+        RandomGenerator rng;
+        for(size_t i=0; i<ops; ++i) {
+            store.put("key" + std::to_string(i), "value" + std::to_string(i));
+        }
+        Benchmark("mixed (80% reads)")
+            .run_throughput(ops, [&]() {
+                size_t k = rng.uniform(0, ops-1);
+                if(rng.uniform_real() < 0.8) {
+                    store.get("key" + std::to_string(k));
+                } else {
+                    store.put("key" + std::to_string(k), "newvalue");
+                }
+            })
+            .print();
+        store.clear();
+    }
+
+    std::cout << std::endl;
+}
+
+//=========================================================================================
+// network benchmarks
+// =========================================================================================
+void bench_network_throughput(net::client::Client& client, core::Store& store, size_t ops) {
+    // PING
+    Benchmark("ping")
+        .run_throughput(ops, [&](){
+            client.ping();
+        })
+        .print();
+
+    // PUT small
+    {
+        DataSet data(ops, 16, 64);
+        size_t i = 0;
+        store.clear();
+        Benchmark("put (key=16, val=64)")
+            .run_throughput(ops, [&]() { 
+                client.put(data.key(i), data.value(i)); 
+                ++i; 
+            })
+            .print();
+    }
+
+    // PUT large
+    {
+        DataSet data(ops, 16, 1024);
+        size_t i = 0;
+        store.clear();
+        Benchmark("put (key=16, val=1024)")
+            .run_throughput(ops, [&]() { 
+                client.put(data.key(i), data.value(i)); 
+                ++i; 
+            })
+            .print();
+    }
+
+    // GET
+    {
+        store.clear();
+        for (size_t i = 0; i < 1000; ++i) {
+            client.put("key" + std::to_string(i), "value" + std::to_string(i));
+        }
+        size_t i = 0;
+        Benchmark("get")
+            .run_throughput(ops, [&]() { 
+                client.get("key" + std::to_string(i % 1000)); 
+                ++i; 
+            })
+            .print();
+    }
+}
+
+void bench_network_latency(net::client::Client& client, core::Store& store, size_t ops) {
+    // PING
+    Benchmark("ping")
+        .run_latency(ops, [&](){
+            client.ping();
+        })
+        .print();
+
+    // PUT small
+    {
+        DataSet data(ops, 16, 64);
+        size_t i = 0;
+        store.clear();
+        Benchmark("put (key=16, val=64)")
+            .run_latency(ops, [&]() { 
+                client.put(data.key(i), data.value(i)); 
+                ++i; 
+            })
+            .print();
+    }
+
+    // PUT large
+    {
+        DataSet data(ops, 16, 1024);
+        size_t i = 0;
+        store.clear();
+        Benchmark("put (key=16, val=1024)")
+            .run_latency(ops, [&]() { 
+                client.put(data.key(i), data.value(i)); 
+                ++i; 
+            })
+            .print();
+    }
+
+    // GET
+    {
+        store.clear();
+        for (size_t i = 0; i < 1000; ++i) {
+            client.put("key" + std::to_string(i), "value" + std::to_string(i));
+        }
+        size_t i = 0;
+        Benchmark("get")
+            .run_latency(ops, [&]() { 
+                client.get("key" + std::to_string(i % 1000)); 
+                ++i; 
+            })
+            .print();
+    }
+}
+
+//=========================================================================================
+// multi threaded benchmarks
+// =========================================================================================
+MultiThreadResult bench_multithread(
+    const std::string& name,
+    net::server::Server& server,
+    size_t num_threads,
+    size_t ops_per_thread,
+    pool binary,
+    std::function<void(net::client::Client&, size_t)> worker_fn
+) {
+    std::vector<std::thread> threads;
+
+    auto start = Clock::now();
+    for(size_t t=0; t < num_threads; ++t) {
+        threads.emplace_back([&, t](){
+            net::client::ClientOptions opts;
+            opts.port = server.port();
+            opts.binary = binary;
+
+            net::client::Client client(opts);
+            client.connect();
+
+            worker_fn(client, ops_per_thread);
+
+            client.disconnect();
+        });
+    }
+
+    for(auto& th : threads) {
+        th.join();
     }
     auto end = Clock::now();
 
     double seconds = std::chrono::duration<double>(end - start).count();
-    return {
-        "Store::mixed (" + std::to_string(static_cast<int>(read_ratio * 100)) + "% reads)",
-        count,
-        seconds,
-        count / seconds,
-        (seconds * 1'000'000) / count
-    };
+    return {name, num_threads, num_threads*ops_per_thread, seconds};
 }
 
-// =========================================================================================
-// client benchmarks (direct, no network)
-// =========================================================================================
+void bench_multithread_scaling(
+    net::server::Server& server,
+    core::Store& store,
+    size_t ops_per_thread,
+    bool binary
+) {
+    for(size_t threads : {1, 2, 4, 8}) {
+        store.clear();
+        DataSet data(ops_per_thread, 16, 64);
 
-BenchmarkResult bench_client_put(net::client::Client& client, size_t count, size_t key_size, size_t value_size) {
-    std::mt19937 rng(42);
-    std::vector<std::string> keys;
-    std::vector<std::string> values;
-
-    keys.reserve(count);
-    values.reserve(count);
-    for(size_t i=0; i<count; ++i) {
-        keys.push_back(random_string(key_size, rng));
-        values.push_back(random_string(value_size, rng));
+        bench_multithread(
+            "put (key=16, val=64)",
+            server, threads, ops_per_thread, binary,
+            [&data](net::client::Client& client, size_t ops) {
+                for(size_t i=0; i<ops; ++i) {
+                    client.put(data.key(i), data.value(i));
+                }
+            }
+        ).print();
     }
 
-    auto start = Clock::now();
-    for(size_t i=0; i < count; ++i) {
-        client.put(keys[i], values[i]);
-    }
-    auto end = Clock::now();
+    std::cout << std::endl;
 
-    double seconds = std::chrono::duration<double>(end-start).count();
-    return {
-        "Client::put (key=" + std::to_string(key_size) + ", val=" + std::to_string(value_size) + ")",
-        count,
-        seconds,
-        count/seconds,
-        (seconds*1'000'000)/count
-    };
+    //pre populate for mixed workload
+    store.clear();
+    {
+        net::client::ClientOptions opts;
+        opts.port = server.port();
+        opts.binary = binary;
+        net::client::Client client(opts);
+        client.connect();
+        for (size_t i = 0; i < 10000; ++i) {
+            client.put("key" + std::to_string(i), "value" + std::to_string(i));
+        }
+        client.disconnect();
+    }
+
+    for (size_t threads : {1, 2, 4, 8}) {
+        bench_multithread(
+            "mixed (80% reads)",
+            server, threads, ops_per_thread, binary,
+            [](net::client::Client& client, size_t ops) {
+                RandomGenerator rng;
+                for (size_t i = 0; i < ops; ++i) {
+                    size_t k = rng.uniform(0, 9999);
+                    if (rng.uniform_real() < 0.8) {
+                        client.get("key" + std::to_string(k));
+                    } else {
+                        client.put("key" + std::to_string(k), "newvalue");
+                    }
+                }
+            }
+        ).print();
+    }
 }
 
-BenchmarkResult bench_client_get(net::client::Client& client, size_t count) {
-    for(size_t i=0; i<1000; ++i) {
-        client.put("key"+std::to_string(i), "value"+std::to_string(i));
-    }
-    
-    auto start = Clock::now();
-    for(size_t i=0; i<count; ++i) {
-        (void) client.get("key"+std::to_string(i%1000));
-    }
-    auto end = Clock::now();
+//=========================================================================================
+// protocol comparison
+// =========================================================================================
+void bench_protocol_comparison(net::server::Server& server, core::Store& store, size_t ops) {
+    DataSet data(ops, 16, 64);
 
-    double seconds = std::chrono::duration<double>(end-start).count();
-    return {
-        "Client::get",
-        count,
-        seconds,
-        count/seconds,
-        (seconds*1'000'000)/count
-    };
+    // Text
+    {
+        net::client::ClientOptions opts;
+        opts.port = server.port();
+        opts.binary = false;
+        net::client::Client client(opts);
+        client.connect();
+
+        store.clear();
+        size_t i = 0;
+        auto result = Benchmark("text: put (key=16, val=64)")
+            .run_throughput(ops, [&]() { client.put(data.key(i), data.value(i)); ++i; });
+        result.print();
+
+        client.disconnect();
+    }
+
+    // Binary
+    {
+        net::client::ClientOptions opts;
+        opts.port = server.port();
+        opts.binary = true;
+        net::client::Client client(opts);
+        client.connect();
+
+        store.clear();
+        size_t i = 0;
+        auto result = Benchmark("binary: put (key=16, val=64)")
+            .run_throughput(ops, [&]() { client.put(data.key(i), data.value(i)); ++i; });
+        result.print();
+
+        client.disconnect();
+    }
 }
 
-BenchmarkResult bench_client_ping(net::client::Client& client, size_t count) {
-    auto start = Clock::now();
-    for(size_t i=0; i<count; ++i) {
-        (void) client.ping();
-    }
-    auto end = Clock::now();
-
-    double seconds = std::chrono::duration<double>(end-start).count();
-    return {
-        "Client::ping",
-        count,
-        seconds,
-        count/seconds,
-        (seconds*1'000'000)/count
-    };
-}
-
-// =========================================================================================
-// diskstore benchmarks
-// =========================================================================================
-
-// =========================================================================================
-// latency histograms
-// =========================================================================================
-
-// =========================================================================================
-// multi-threaded client benchmark
-// =========================================================================================
-
-// =========================================================================================
+//=========================================================================================
 // main
 // =========================================================================================
-
 int main(int argc, char* argv[]) {
     size_t ops = 100000;
     bool run_network = true;
     bool run_disk = true;
     bool run_latency = true;
     bool run_multithread = true;
+    bool run_comparison = true;
     bool use_binary = false;
 
     for(int i=1; i<argc; ++i) {
@@ -263,6 +343,8 @@ int main(int argc, char* argv[]) {
             run_latency = false;
         } else if(arg == "--no-multithread") {
             run_multithread = false;
+        } else if (arg == "--no-comparison") {
+            run_comparison = true;
         } else if (arg == "--binary") {
             use_binary = true;
         } else if (arg == "--help") {
@@ -270,9 +352,10 @@ int main(int argc, char* argv[]) {
                       << "Options:\n"
                       << "  --ops N           number of operatiosn (default: 100000)\n"
                       << "  --no-disk         skip DiskStore benchmarks\n"
-                      << "  --no-network      skip network throughput benchmarks\n"
-                      << "  --no-latency      skip network latency histogram benchmarks\n"
+                      << "  --no-network      skip network benchmarks\n"
+                      << "  --no-latency      skip latency histogram benchmarks\n"
                       << "  --no-multithread  skip multi-threaded benchmarks\n"
+                      << "  --no-comparison   skip protocol comparison\n"
                       << "  --binary          use binary protocol for network tests\n"
                       << "  --help            show this help\n";
             return 0;
@@ -283,70 +366,74 @@ int main(int argc, char* argv[]) {
     std::cout << "Operations per tests: " << ops << std::endl;
     std::cout << std::endl;
 
-    // direct store benchmarks ----------------------------------------------------------
-    std::cout << "--- Direct Store (no network) ---" << std::endl;
+    // in memory store
     {
         core::Store store;
-        print_result(bench_store_put(store, ops, 16, 64));
-        store.clear();
-
-        print_result(bench_store_put(store, ops, 16, 1024));
-        store.clear();
-
-        //populate for get test
-        for(size_t i=0 ; i<ops; ++i) {
-            store.put("key"+std::to_string(i), "value"+std::to_string(i));
-        }
-        print_result(bench_store_get(store, ops));
-        store.clear();
-
-        print_result(bench_store_mixed(store, ops, 0.8));
-        store.clear();
-
-        print_result(bench_store_mixed(store, ops, 0.5));
+        bench_store(store, "Store (in-memory)", ops);
     }
-    std::cout << std::endl;
-    
-    // DiskStore benchmarks -------------------------------------------------------------
 
+    // disk store
+    if(run_disk) {
+        auto temp_dir = std::filesystem::temp_directory_path() / "kvstore_bench";
+        std::filesystem::remove_all(temp_dir);
+        std::filesystem::create_directories(temp_dir);
 
-    // network throughput benchmarks -------------------------------------------------------------
+        core::DiskStoreOptions disk_opts;
+        disk_opts.data_dir = temp_dir;
+        core::DiskStore store(disk_opts);
+
+        bench_store(store, "DiskStore", ops/10);
+        
+        std::filesystem::remove_all(temp_dir);
+    }
+
+    // network benchmarks
     if(run_network) {
-        std::cout << "--- Network (" << (use_binary ? "binary" : "text") << " protocol) ---" << std::endl;
-
         core::Store store;
 
         net::server::ServerOptions server_opts;
         server_opts.port = 0;
         net::server::Server server(store, server_opts);
         server.start();
-
+    
         net::client::ClientOptions client_opts;
         client_opts.port = server.port();
         client_opts.binary = use_binary;
         net::client::Client client(client_opts);
         client.connect();
 
-        print_result(bench_client_ping(client, ops));
+        std::string protocol_name = use_binary ? "binary" : "text";
 
-        store.clear();
-        print_result(bench_client_put(client, ops, 16, 64));
-
-        store.clear();
-        print_result(bench_client_put(client, ops, 16, 1024));
-
-        store.clear();
-        print_result(bench_client_get(client, ops));
+        //throughput
+        print_header("Network throughput (" + protocol_name + ")");
+        bench_network_throughput(client, store, ops);
+        std::cout << std::endl;
+    
+        if(run_latency) {
+            print_header("Network latency (" + protocol_name + ")");
+            bench_network_latency(client, store, std::min(ops, size_t(10000)));
+            std::cout << std::endl;
+        }
 
         client.disconnect();
+
+        //multi thread
+        if(run_multithread) {
+            print_header("Multi-threaded (" + protocol_name + ")");
+            bench_multithread_scaling(server, store, ops/10, use_binary);
+            std::cout << std::endl;
+        }
+
+        //protocol comparison
+        if(run_comparison && !use_binary) {
+            print_header("Protocol comparison");
+            bench_protocol_comparison(server, store, ops / 2);
+            std::cout << std::endl;
+        }
+        
         server.stop();
-    }
+    } 
 
-    // network latency benchmarks -------------------------------------------------------------
-
-    // multithreading benchmarks -------------------------------------------------------------
-
-    std::cout << std::endl;
     std::cout << "Benchmark complete" << std::endl;
 
     return 0;
