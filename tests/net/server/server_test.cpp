@@ -1,4 +1,4 @@
-#include "kvstore/net/server.hpp"
+#include "kvstore/net/server/server.hpp"
 
 #include <arpa/inet.h>
 #include <gtest/gtest.h>
@@ -18,10 +18,10 @@ class ServerTest : public ::testing::Test {
    protected:
     void SetUp() override {
         store_ = std::make_unique<core::Store>();
-        ServerOptions opts;
+        server::ServerOptions opts;
         opts.port =
             16379;  // test port; avoid conflicts with real redis. ports above 1024 dont need root
-        server_ = std::make_unique<Server>(*store_, opts);
+        server_ = std::make_unique<server::Server>(*store_, opts);
     }
 
     void TearDown() override {
@@ -87,7 +87,7 @@ class ServerTest : public ::testing::Test {
     // object would be constructed during fixture construction, before Setup(). also allows
     // tearDown() to destroy early if needed
     std::unique_ptr<core::Store> store_;
-    std::unique_ptr<Server> server_;
+    std::unique_ptr<server::Server> server_;
 };
 
 TEST_F(ServerTest, Ping) {
@@ -187,9 +187,9 @@ class ServerDiskStoreTest : public ::testing::Test {
         store_opts.data_dir = test_dir_;
         store_ = std::make_unique<core::DiskStore>(store_opts);
 
-        ServerOptions server_opts;
+        server::ServerOptions server_opts;
         server_opts.port = 16382;
-        server_ = std::make_unique<Server>(*store_, server_opts);
+        server_ = std::make_unique<server::Server>(*store_, server_opts);
     }
 
     void TearDown() override {
@@ -237,7 +237,7 @@ class ServerDiskStoreTest : public ::testing::Test {
 
     std::filesystem::path test_dir_;
     std::unique_ptr<core::DiskStore> store_;
-    std::unique_ptr<Server> server_;
+    std::unique_ptr<server::Server> server_;
 };
 
 TEST_F(ServerDiskStoreTest, Ping) {

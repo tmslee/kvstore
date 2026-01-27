@@ -1,4 +1,4 @@
-#include "kvstore/net/client.hpp"
+#include "kvstore/net/client/client.hpp"
 
 #include <gtest/gtest.h>
 
@@ -6,7 +6,7 @@
 
 #include "kvstore/core/disk_store.hpp"
 #include "kvstore/core/store.hpp"
-#include "kvstore/net/server.hpp"
+#include "kvstore/net/server/server.hpp"
 
 namespace kvstore::net::test {
 
@@ -14,15 +14,15 @@ class ClientTest : public ::testing::Test {
    protected:
     void SetUp() override {
         store_ = std::make_unique<core::Store>();
-        ServerOptions server_opts;
+        server::ServerOptions server_opts;
         server_opts.port = 16380;
-        server_ = std::make_unique<Server>(*store_, server_opts);
+        server_ = std::make_unique<server::Server>(*store_, server_opts);
         server_->start();
 
-        ClientOptions client_opts;
+        client::ClientOptions client_opts;
         client_opts.port = 16380;
         client_opts.timeout_seconds = 5;
-        client_ = std::make_unique<Client>(client_opts);
+        client_ = std::make_unique<client::Client>(client_opts);
         client_->connect();
     }
 
@@ -32,8 +32,8 @@ class ClientTest : public ::testing::Test {
     }
 
     std::unique_ptr<core::Store> store_;
-    std::unique_ptr<Server> server_;
-    std::unique_ptr<Client> client_;
+    std::unique_ptr<server::Server> server_;
+    std::unique_ptr<client::Client> client_;
 };
 
 TEST_F(ClientTest, Ping) {
@@ -158,15 +158,15 @@ class ClientDiskStoreTest : public ::testing::Test {
         store_opts.data_dir = test_dir_;
         store_ = std::make_unique<core::DiskStore>(store_opts);
 
-        ServerOptions server_opts;
+        server::ServerOptions server_opts;
         server_opts.port = 16381;
-        server_ = std::make_unique<Server>(*store_, server_opts);
+        server_ = std::make_unique<server::Server>(*store_, server_opts);
         server_->start();
 
-        ClientOptions client_opts;
+        client::ClientOptions client_opts;
         client_opts.port = 16381;
         client_opts.timeout_seconds = 5;
-        client_ = std::make_unique<Client>(client_opts);
+        client_ = std::make_unique<client::Client>(client_opts);
         client_->connect();
     }
 
@@ -179,8 +179,8 @@ class ClientDiskStoreTest : public ::testing::Test {
 
     std::filesystem::path test_dir_;
     std::unique_ptr<core::DiskStore> store_;
-    std::unique_ptr<Server> server_;
-    std::unique_ptr<Client> client_;
+    std::unique_ptr<server::Server> server_;
+    std::unique_ptr<client::Client> client_;
 };
 
 TEST_F(ClientDiskStoreTest, Ping) {
@@ -270,6 +270,100 @@ TEST_F(ClientDiskStoreTest, MultipleOperations) {
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(*result, "value" + std::to_string(i));
     }
+}
+
+class BinaryClientTest : public ::testing::Test {
+   protected:
+    void SetUp() override {
+        store_ = std::make_unique<core::Store>();
+
+        server::ServerOptions server_opts;
+        server_opts.port = 0;  // Let OS pick port
+        server_ = std::make_unique<server::Server>(*store_, server_opts);
+        server_->start();
+
+        client::ClientOptions client_opts;
+        client_opts.port = server_->port();
+        client_opts.binary = true;
+        client_ = std::make_unique<client::Client>(client_opts);
+        client_->connect();
+    }
+
+    void TearDown() override {
+        client_->disconnect();
+        server_->stop();
+    }
+
+    std::unique_ptr<core::Store> store_;
+    std::unique_ptr<server::Server> server_;
+    std::unique_ptr<client::Client> client_;
+};
+
+TEST_F(BinaryClientTest, Ping) {
+    EXPECT_TRUE(client_->ping());
+}
+
+TEST_F(BinaryClientTest, PutAndGet) {
+    client_->put("key1", "value1");
+
+    auto result = client_->get("key1");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, "value1");
+}
+
+TEST_F(BinaryClientTest, GetMissing) {
+    auto result = client_->get("nonexistent");
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(BinaryClientTest, Remove) {
+    client_->put("key1", "value1");
+
+    EXPECT_TRUE(client_->remove("key1"));
+    EXPECT_FALSE(client_->contains("key1"));
+    EXPECT_FALSE(client_->remove("key1"));
+}
+
+TEST_F(BinaryClientTest, Contains) {
+    EXPECT_FALSE(client_->contains("key1"));
+
+    client_->put("key1", "value1");
+    EXPECT_TRUE(client_->contains("key1"));
+}
+
+TEST_F(BinaryClientTest, Size) {
+    EXPECT_EQ(client_->size(), 0);
+
+    client_->put("key1", "value1");
+    EXPECT_EQ(client_->size(), 1);
+
+    client_->put("key2", "value2");
+    EXPECT_EQ(client_->size(), 2);
+}
+
+TEST_F(BinaryClientTest, Clear) {
+    client_->put("key1", "value1");
+    client_->put("key2", "value2");
+
+    client_->clear();
+    EXPECT_EQ(client_->size(), 0);
+}
+
+TEST_F(BinaryClientTest, BinaryData) {
+    std::string binary_value("\x00\x01\x02\xFF\xFE", 5);
+    client_->put("binkey", binary_value);
+
+    auto result = client_->get("binkey");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, binary_value);
+}
+
+TEST_F(BinaryClientTest, PutWithTTL) {
+    client_->put("ttlkey", "ttlvalue", util::Duration(60000));
+
+    auto result = client_->get("ttlkey");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, "ttlvalue");
 }
 
 }  // namespace kvstore::net::test

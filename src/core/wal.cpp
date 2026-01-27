@@ -43,22 +43,21 @@ WriteAheadLog& WriteAheadLog::operator=(WriteAheadLog&& other) noexcept {
 }
 
 void WriteAheadLog::write_header() {
-    util::write_uint32(out_, kMagic);
-    util::write_uint32(out_, kVersion);
+    util::write_int<uint32_t>(out_, kMagic);
+    util::write_int<uint32_t>(out_, kVersion);
     out_.flush();
 }
 
 bool WriteAheadLog::validate_header(std::ifstream& in) {
-    uint32_t magic = util::read_uint32(in);
-    if (!in.good() || magic != kMagic) {
+    uint32_t magic;
+    if (!util::read_int<uint32_t>(in, magic) || magic != kMagic) {
         return false;
     }
 
-    uint32_t version = util::read_uint32(in);
-    if (!in.good() || version != kVersion) {
+    uint32_t version;
+    if (!util::read_int<uint32_t>(in, version) || version != kVersion) {
         return false;
     }
-
     return true;
 }
 
@@ -84,7 +83,7 @@ void WriteAheadLog::log_clear() {
 }
 
 void WriteAheadLog::write_entry(EntryType type, std::string_view key, std::string_view value) {
-    util::write_uint8(out_, static_cast<uint8_t>(type));
+    util::write_int<uint8_t>(out_, static_cast<uint8_t>(type));
     util::write_string(out_, key);
     util::write_string(out_, value);
     out_.flush();
@@ -92,10 +91,10 @@ void WriteAheadLog::write_entry(EntryType type, std::string_view key, std::strin
 
 void WriteAheadLog::write_entry_with_ttl(EntryType type, std::string_view key,
                                          std::string_view value, int64_t expires_at_ms) {
-    util::write_uint8(out_, static_cast<uint8_t>(type));
+    util::write_int<uint8_t>(out_, static_cast<uint8_t>(type));
     util::write_string(out_, key);
     util::write_string(out_, value);
-    util::write_int64(out_, expires_at_ms);
+    util::write_int<uint64_t>(out_, expires_at_ms);
     out_.flush();
 }
 
@@ -103,12 +102,12 @@ bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& 
                                std::string& value, util::ExpirationTime& expires_at) {
     // we return bool instead of throwing because end of file is expected, not exceptional
     // not being able to read successfully is an expected pattern eventually
-    uint8_t type_byte = util::read_uint8(in);
-    if (!in.good()) {
+    uint8_t type_byte;
+    if (!util::read_int<uint8_t>(in, type_byte)) {
         return false;
     }
-    type = static_cast<EntryType>(type_byte);
 
+    type = static_cast<EntryType>(type_byte);
     if (!util::read_string(in, key)) {
         return false;
     }
@@ -116,10 +115,11 @@ bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& 
         return false;
     }
     if (type == EntryType::PutWithTTL) {
-        expires_at = util::read_int64(in);
-        if (!in.good()) {
+        int64_t expires_at_ms;
+        if (!util::read_int<int64_t>(in, expires_at_ms)) {
             return false;
         }
+        expires_at = expires_at_ms;
     } else {
         expires_at = std::nullopt;
     }

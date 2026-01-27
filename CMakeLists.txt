@@ -43,15 +43,21 @@ target_sources(kvstore
     PRIVATE
         src/core/store.cpp
         src/core/wal.cpp
-        src/net/server.cpp
-        src/net/protocol.cpp
-        src/net/client.cpp
         src/core/snapshot.cpp
         src/core/disk_store.cpp
+
+        src/net/binary_protocol.cpp
+        src/net/text_protocol.cpp
+        
+        src/net/server/server.cpp
+        src/net/server/protocol_handler.cpp
+
+        src/net/client/client.cpp
+        src/net/client/protocol_handler.cpp
+
         src/util/signal_handler.cpp
         src/util/logger.cpp
         src/util/config.cpp
-        src/net/binary_protocol.cpp
 )
 
 target_include_directories(kvstore

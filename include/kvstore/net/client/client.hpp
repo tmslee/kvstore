@@ -1,5 +1,5 @@
-#ifndef KVSTORE_NET_CLIENT_HPP
-#define KVSTORE_NET_CLIENT_HPP
+#ifndef KVSTORE_NET_CLIENT_CLIENT_HPP
+#define KVSTORE_NET_CLIENT_CLIENT_HPP
 
 #include <cstdint>
 #include <memory>
@@ -9,12 +9,13 @@
 
 #include "kvstore/util/types.hpp"
 
-namespace kvstore::net {
+namespace kvstore::net::client {
 
 struct ClientOptions {
     std::string host = "127.0.0.1";
     uint16_t port = 6379;
     int timeout_seconds = 30;
+    bool binary = false;
 };
 
 class Client {
@@ -63,6 +64,6 @@ class Client {
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace kvstore::net
+}  // namespace kvstore::net::client
 
 #endif

@@ -52,8 +52,8 @@ class DiskStore::Impl {
 
         // write header if new file. existing file - rebuild index by reading entries
         if (!file_exists || std::filesystem::file_size(data_path_) == 0) {
-            util::write_uint32(data_file_, kMagic);
-            util::write_uint32(data_file_, kVersion);
+            util::write_int<uint32_t>(data_file_, kMagic);
+            util::write_int<uint32_t>(data_file_, kVersion);
             data_file_.flush();
         } else {
             load_index();
@@ -158,8 +158,8 @@ class DiskStore::Impl {
         data_file_.close();
 
         data_file_.open(data_path_, std::ios::binary | std::ios::out | std::ios::trunc);
-        util::write_uint32(data_file_, kMagic);
-        util::write_uint32(data_file_, kVersion);
+        util::write_int<uint32_t>(data_file_, kMagic);
+        util::write_int<uint32_t>(data_file_, kVersion);
         data_file_.flush();
         data_file_.close();
 
@@ -185,13 +185,8 @@ class DiskStore::Impl {
         data_file_.seekg(0);
 
         // header check
-        uint32_t magic = util::read_uint32(data_file_);
-        if (magic != kMagic) {
-            throw std::runtime_error("invalid data file: bad magic");
-        }
-        uint32_t version = util::read_uint32(data_file_);
-        if (version != kVersion) {
-            throw std::runtime_error("unsupported data file version: " + std::to_string(version));
+        if (!validate_header()) {
+            throw std::runtime_error("Invalid data file: bad header");
         }
 
         // read every entry
@@ -200,8 +195,8 @@ class DiskStore::Impl {
             uint64_t offset = data_file_.tellg();
 
             // fetch type, key, value, expiration time
-            uint8_t entry_type = util::read_uint8(data_file_);
-            if (!data_file_.good()) {
+            uint8_t entry_type;
+            if (!util::read_int<uint8_t>(data_file_, entry_type)) {
                 break;
             }
             std::string key;
@@ -212,14 +207,15 @@ class DiskStore::Impl {
             if (!util::read_string(data_file_, value)) {
                 break;
             }
-            uint8_t has_expiration = util::read_uint8(data_file_);
-            if (!data_file_.good()) {
+            uint8_t has_expiration;
+            if (!util::read_int<uint8_t>(data_file_, has_expiration)) {
                 break;
             }
+
             std::optional<util::TimePoint> expires_at = std::nullopt;
             if (has_expiration != 0) {
-                int64_t expires_at_ms = util::read_int64(data_file_);
-                if (!data_file_.good()) {
+                uint64_t expires_at_ms;
+                if (!util::read_int<uint64_t>(data_file_, expires_at_ms)) {
                     break;
                 }
                 expires_at = util::from_epoch_ms(expires_at_ms);
@@ -257,14 +253,14 @@ class DiskStore::Impl {
 
         // write entry
         uint8_t entry_type = is_tombstone ? kEntryTombstone : kEntryRegular;
-        util::write_uint8(data_file_, entry_type);
+        util::write_int<uint8_t>(data_file_, entry_type);
         util::write_string(data_file_, key);
         util::write_string(data_file_, value);
 
         uint8_t has_expiration = expires_at_ms.has_value() ? 1 : 0;
-        util::write_uint8(data_file_, has_expiration);
+        util::write_int<uint8_t>(data_file_, has_expiration);
         if (expires_at_ms.has_value()) {
-            util::write_int64(data_file_, expires_at_ms.value());
+            util::write_int<uint64_t>(data_file_, expires_at_ms.value());
         }
 
         data_file_.flush();
@@ -297,9 +293,8 @@ class DiskStore::Impl {
 
     [[nodiscard]] std::string read_value(const IndexEntry& entry) {
         data_file_.seekg(entry.offset);
-
-        util::read_uint8(data_file_);
-
+        uint8_t entry_type;
+        util::read_int<uint8_t>(data_file_, entry_type);
         std::string key;
         util::read_string(data_file_, key);
         std::string value;
@@ -331,8 +326,8 @@ class DiskStore::Impl {
             if (!temp_file.is_open()) {
                 throw std::runtime_error("failed to open temp file for compaction");
             }
-            util::write_uint32(temp_file, kMagic);
-            util::write_uint32(temp_file, kVersion);
+            util::write_int<uint32_t>(temp_file, kMagic);
+            util::write_int<uint32_t>(temp_file, kVersion);
 
             std::unordered_map<std::string, IndexEntry> new_index;
 
@@ -345,14 +340,15 @@ class DiskStore::Impl {
 
                 std::string value = read_value(entry);
 
-                util::write_uint8(temp_file, kEntryRegular);
+                util::write_int<uint8_t>(temp_file, kEntryRegular);
                 util::write_string(temp_file, key);
                 util::write_string(temp_file, value);
 
                 uint8_t has_expiration = entry.expires_at.has_value() ? 1 : 0;
-                util::write_uint8(temp_file, has_expiration);
+                util::write_int<uint8_t>(temp_file, has_expiration);
                 if (entry.expires_at.has_value()) {
-                    util::write_int64(temp_file, util::to_epoch_ms(entry.expires_at.value()));
+                    util::write_int<uint64_t>(temp_file,
+                                              util::to_epoch_ms(entry.expires_at.value()));
                 }
 
                 new_index[key] = IndexEntry{new_offset, static_cast<uint32_t>(value.size()),
@@ -367,6 +363,19 @@ class DiskStore::Impl {
         index_.clear();
         load_index();
         tombstone_count_ = 0;
+    }
+
+    bool validate_header() {
+        uint32_t magic;
+        if (!util::read_int<uint32_t>(data_file_, magic) || magic != kMagic) {
+            return false;
+        }
+
+        uint32_t version;
+        if (!util::read_int<uint32_t>(data_file_, version) || version != kVersion) {
+            return false;
+        }
+        return true;
     }
 
     DiskStoreOptions options_;

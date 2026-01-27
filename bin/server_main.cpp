@@ -2,7 +2,7 @@
 
 #include "kvstore/core/store.hpp"
 #include "kvstore/core/disk_store.hpp"
-#include "kvstore/net/server.hpp"
+#include "kvstore/net/server/server.hpp"
 #include "kvstore/util/signal_handler.hpp"
 #include "kvstore/util/logger.hpp"
 #include "kvstore/util/config.hpp"
@@ -67,13 +67,13 @@ int main(int argc, char* argv[]) {
         }
 
         //setup server
-        kvstore::net::ServerOptions server_opts;
+        kvstore::net::server::ServerOptions server_opts;
         server_opts.host = config.host;
         server_opts.port = config.port;
         server_opts.max_connections = config.max_connections;
         server_opts.client_timeout_seconds = config.client_timeout_seconds;
 
-        kvstore::net::Server server(*store, server_opts);
+        kvstore::net::server::Server server(*store, server_opts);
 
         //install signal handlers
         kvstore::util::SignalHandler::install();
