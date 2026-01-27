@@ -64,8 +64,8 @@ struct MultiThreadResult {
     std::string name;
     size_t num_threads;
     size_t total_operations;
-    double total_seconds:
-    double ops_per_second() const {return total_operations / total-seconds; }
+    double total_seconds;
+    double ops_per_second() const {return total_operations / total_seconds; }
     void print() const {
         std::cout << std::left << std::setw(50) << name
                   << std::right
@@ -88,7 +88,7 @@ public:
         for(size_t i=0; i<count; ++i) {
             op();
         }
-        auto end = ClocK::now();
+        auto end = Clock::now();
         double seconds = std::chrono::duration<double>(end-start).count();
         return {name_, count, seconds};
     }
@@ -124,7 +124,7 @@ public:
         for (size_t i = 0; i < length; ++i) {
             result[i] = charset[dist(rng_)];
         }
-        return result
+        return result;
     }
 
     size_t uniform(size_t min, size_t max) {
@@ -143,9 +143,9 @@ private:
 
 class DataSet {
 public:
-    DataSet(size_T count, size_t key_size, size_t value_size, uint32_t seed = 42) {
+    DataSet(size_t count, size_t key_size, size_t value_size, uint32_t seed = 42) {
         RandomGenerator rng(seed);
-        keys.reserve(count);
+        keys_.reserve(count);
         values_.reserve(count);
         for(size_t i=0; i<count; i++) {
             keys_.push_back(rng.string(key_size));

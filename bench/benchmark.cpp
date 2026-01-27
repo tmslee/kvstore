@@ -15,7 +15,7 @@ using namespace kvstore::bench;
 //=========================================================================================
 // store benchmarks
 // =========================================================================================
-void bench_store(core::Istore& store, const std::string& store_name, size_t ops){
+void bench_store(core::IStore& store, const std::string& store_name, size_t ops){
     print_header(store_name);
 
     //PUT small values
@@ -54,7 +54,7 @@ void bench_store(core::Istore& store, const std::string& store_name, size_t ops)
             .run_throughput(ops, [&]() {
                 store.get("key" + std::to_string(i % ops));
                 ++i;
-            });
+            })
             .print();
         store.clear();
     }
@@ -88,7 +88,7 @@ void bench_network_throughput(net::client::Client& client, core::Store& store, s
     // PING
     Benchmark("ping")
         .run_throughput(ops, [&](){
-            client.ping();
+            (void) client.ping();
         })
         .print();
 
@@ -127,7 +127,7 @@ void bench_network_throughput(net::client::Client& client, core::Store& store, s
         size_t i = 0;
         Benchmark("get")
             .run_throughput(ops, [&]() { 
-                client.get("key" + std::to_string(i % 1000)); 
+                (void) client.get("key" + std::to_string(i % 1000)); 
                 ++i; 
             })
             .print();
@@ -138,7 +138,7 @@ void bench_network_latency(net::client::Client& client, core::Store& store, size
     // PING
     Benchmark("ping")
         .run_latency(ops, [&](){
-            client.ping();
+            (void) client.ping();
         })
         .print();
 
@@ -177,7 +177,7 @@ void bench_network_latency(net::client::Client& client, core::Store& store, size
         size_t i = 0;
         Benchmark("get")
             .run_latency(ops, [&]() { 
-                client.get("key" + std::to_string(i % 1000)); 
+                (void) client.get("key" + std::to_string(i % 1000)); 
                 ++i; 
             })
             .print();
@@ -192,7 +192,7 @@ MultiThreadResult bench_multithread(
     net::server::Server& server,
     size_t num_threads,
     size_t ops_per_thread,
-    pool binary,
+    bool binary,
     std::function<void(net::client::Client&, size_t)> worker_fn
 ) {
     std::vector<std::thread> threads;
@@ -268,7 +268,7 @@ void bench_multithread_scaling(
                 for (size_t i = 0; i < ops; ++i) {
                     size_t k = rng.uniform(0, 9999);
                     if (rng.uniform_real() < 0.8) {
-                        client.get("key" + std::to_string(k));
+                        (void) client.get("key" + std::to_string(k));
                     } else {
                         client.put("key" + std::to_string(k), "newvalue");
                     }
@@ -294,9 +294,12 @@ void bench_protocol_comparison(net::server::Server& server, core::Store& store, 
 
         store.clear();
         size_t i = 0;
-        auto result = Benchmark("text: put (key=16, val=64)")
-            .run_throughput(ops, [&]() { client.put(data.key(i), data.value(i)); ++i; });
-        result.print();
+        Benchmark("text: put (key=16, val=64)")
+            .run_throughput(ops, [&]() { 
+                client.put(data.key(i), data.value(i)); 
+                ++i; 
+            })
+            .print();
 
         client.disconnect();
     }
@@ -311,9 +314,12 @@ void bench_protocol_comparison(net::server::Server& server, core::Store& store, 
 
         store.clear();
         size_t i = 0;
-        auto result = Benchmark("binary: put (key=16, val=64)")
-            .run_throughput(ops, [&]() { client.put(data.key(i), data.value(i)); ++i; });
-        result.print();
+        Benchmark("binary: put (key=16, val=64)")
+            .run_throughput(ops, [&]() { 
+                client.put(data.key(i), data.value(i)); 
+                ++i; 
+            })
+            .print();
 
         client.disconnect();
     }
