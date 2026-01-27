@@ -18,8 +18,10 @@ namespace kvstore::net {
 namespace util = kvstore::util;
 
 std::vector<uint8_t> BinaryProtocol::encode_request(const Request& req) {
+    // 1 byte command
     std::vector<uint8_t> payload;
-    payload.push_back(static_cast<uint8_t>(req.command));  // 1 byte command
+    payload.reserve(128);
+    util::write_int<uint8_t>(payload, static_cast<uint8_t>(req.command));
 
     switch (req.command) {
         case Command::Get:
@@ -36,7 +38,7 @@ std::vector<uint8_t> BinaryProtocol::encode_request(const Request& req) {
         case Command::PutEx:
             util::write_string(payload, req.key);
             util::write_string(payload, req.value);
-            util::write_uint64_be(payload, static_cast<uint64_t>(req.ttl_ms));  // key + val + ttl
+            util::write_int<uint64_t>(payload, static_cast<uint64_t>(req.ttl_ms)); // key + val + ttl
             break;
         default:
             break;
@@ -44,7 +46,7 @@ std::vector<uint8_t> BinaryProtocol::encode_request(const Request& req) {
 
     std::vector<uint8_t> result;
     result.reserve(4 + payload.size());
-    util::write_uint32_be(result, static_cast<uint32_t>(payload.size()));  // prepend length
+    util::write_int<uint32_t>(result, static_cast<uint32_t>(payload.size()));  // prepend length
     result.insert(result.end(), payload.begin(), payload.end());     // insert payload
 
     return result;
@@ -58,24 +60,23 @@ std::optional<Request> BinaryProtocol::decode_request(const std::vector<uint8_t>
     }
 
     // check full msg arrived
-    uint32_t msg_len = util::read_uint32_be(data.data());
+    uint32_t msg_len = util::read_int<uint32_t>(data.data());
     if (data.size() < 4 + msg_len) {
         return std::nullopt;
     }
 
     // tell caller how much we used
     bytes_consumed = 4 + msg_len;
-
     if (msg_len < 1) {
         throw std::runtime_error("Empty message");
     }
 
     Request req;
-    // get request command from first byte
-    req.command = static_cast<Command>(data[4]);
-
-    size_t offset = 5;  // start of command-specific data
+    size_t offset = 4;  // start of command-specific data
     size_t max_offset = 4 + msg_len;
+
+    // get request command from first byte
+    req.command = static_cast<Command>(util::read_int<uint8_t>(data.data(), offset, max_offset));
 
     switch (req.command) {
         case Command::Get:
@@ -95,7 +96,7 @@ std::optional<Request> BinaryProtocol::decode_request(const std::vector<uint8_t>
             if (offset + 8 > max_offset) {
                 throw std::runtime_error("Incomplete TTL");
             }
-            req.ttl_ms = static_cast<int64_t>(util::read_uint64_be(data.data() + offset));
+            req.ttl_ms = static_cast<int64_t>(util::read_int<uint64_t>(data.data(), offset, max_offset));
             offset += 8;
             break;
 
@@ -115,9 +116,10 @@ std::optional<Request> BinaryProtocol::decode_request(const std::vector<uint8_t>
 
 std::vector<uint8_t> BinaryProtocol::encode_response(const Response& resp) {
     std::vector<uint8_t> payload;
+    payload.reserve(64);
 
-    // 1 bytes status
-    payload.push_back(static_cast<uint8_t>(resp.status));
+    // 1 byte status
+    util::write_int<uint8_t>(payload, static_cast<uint8_t>(resp.status));
 
     if (!resp.data.empty()) {
         util::write_string(payload, resp.data);  // optional data
@@ -125,7 +127,7 @@ std::vector<uint8_t> BinaryProtocol::encode_response(const Response& resp) {
 
     std::vector<uint8_t> result;
     result.reserve(4 + payload.size());
-    util::write_uint32_be(result, static_cast<uint32_t>(payload.size()));
+    util::write_int<uint32_t>(result, static_cast<uint32_t>(payload.size()));
     result.insert(result.end(), payload.begin(), payload.end());
 
     return result;
@@ -138,26 +140,27 @@ std::optional<Response> BinaryProtocol::decode_response(const std::vector<uint8_
     }
 
     // get length
-    uint32_t msg_len = util::read_uint32_be(data.data());
+    uint32_t msg_len = util::read_int<uint32_t>(data.data());
     if (data.size() < 4 + msg_len) {
         return std::nullopt;
     }
 
     bytes_consumed = 4 + msg_len;
-
     if (msg_len < 1) {
         throw std::runtime_error("Empty response");
     }
 
     Response resp;
+    size_t offset = 4;
+    size_t max_offset = 4 + msg_len;
+
     // response status is first byte after length
-    resp.status = static_cast<Status>(data[4]);
+    resp.status = static_cast<Status>(util::read_int<uint8_t>(data.data(), offset, max_offset));
     resp.close_connection = (resp.status == Status::Bye);
 
     // read the rest of the payload (optional string data)
-    if (msg_len > 1) {
-        size_t offset = 5;
-        resp.data = util::read_string(data.data(), offset, 4 + msg_len);
+    if (offset < max_offset) {
+        resp.data = util::read_string(data.data(), offset, max_offset);
     }
 
     return resp;
@@ -170,7 +173,7 @@ bool BinaryProtocol::has_complete_message(const std::vector<uint8_t>& data) {
         return false;
     }
     // read length and see if we have full message
-    uint32_t msg_len = util::read_uint32_be(data.data());
+    uint32_t msg_len = util::read_int<uint32_t>(data.data());
     return data.size() >= 4 + msg_len;
 }
 
@@ -179,7 +182,7 @@ uint32_t BinaryProtocol::peek_message_length(const std::vector<uint8_t>& data) {
     if (data.size() < 4) {
         return 0;
     }
-    return util::read_uint32_be(data.data());
+    return util::read_int<uint32_t>(data.data());
 }
 
 }  // namespace kvstore::net
