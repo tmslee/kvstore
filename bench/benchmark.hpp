@@ -50,10 +50,12 @@ struct LatencyResult {
 
     void print() const {
         std::cout << std::left << std::setw(50) << name
-                  << std::right << std::setw(10) << operations << " ops"
-                  << std::setw(12) << std::fixed << std::setprecision(2) << total_seconds << " s"
-                  << std::setw(12) << std::fixed << std::setprecision(0) << ops_per_second() << " ops/s"
-                  << std::setw(10) << std::fixed << std::setprecision(2) << avg_latency_us() << " us"
+                  << std::right
+                  << "  p50=" << std::setw(8) << std::fixed << std::setprecision(2) << percentile(0.50) << " us"
+                  << "  p90=" << std::setw(8) << std::fixed << std::setprecision(2) << percentile(0.90) << " us"
+                  << "  p99=" << std::setw(8) << std::fixed << std::setprecision(2) << percentile(0.99) << " us"
+                  << "  p99.9=" << std::setw(8) << std::fixed << std::setprecision(2) << percentile(0.999) << " us"
+                  << "  max=" << std::setw(8) << std::fixed << std::setprecision(2) << latencies_us.back() << " us"
                   << std::endl;
     }
 };
@@ -76,16 +78,88 @@ struct MultiThreadResult {
 };
 
 class Benchmark {
+public:
+    using Operation = std::function<void()>;
 
+    explicit Benchmark(std::string name) : name_(std::move(name)) {}
+
+    ThroughputResult run_throughput(size_t count, Operation op) {
+        auto start = Clock::now();
+        for(size_t i=0; i<count; ++i) {
+            op();
+        }
+        auto end = ClocK::now();
+        double seconds = std::chrono::duration<double>(end-start).count();
+        return {name_, count, seconds};
+    }
+
+    LatencyResult run_latency(size_t count, Operation op) {
+        LatencyResult result{name_, count, {}};
+        result.latencies_us.reserve(count);
+        for(size_t i=0; i<count; ++i) {
+            auto start = Clock::now();
+            op();
+            auto end = Clock::now();
+            result.latencies_us.push_back(
+                std::chrono::duration<double, std::micro>(end-start).count()
+            );
+        }
+        result.sort();
+        return result;
+    }
+
+private:
+    std::string name_;
 };
 
 // utilities
 class RandomGenerator {
+public:
+    explicit RandomGenerator(uint32_t seed = 42) : rng_(seed) {}
 
+    std::string string(size_t length) {
+        static const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        std::uniform_int_distribution<size_t> dist(0, sizeof(charset) - 2);
+        std::string result(length, '\0');
+        for (size_t i = 0; i < length; ++i) {
+            result[i] = charset[dist(rng_)];
+        }
+        return result
+    }
+
+    size_t uniform(size_t min, size_t max) {
+        std::uniform_int_distribution<size_t> dist(min, max);
+        return dist(rng_);
+    }
+
+    double uniform_real(double min = 0.0, double max = 1.0) {
+        std::uniform_real_distribution<double> dist(min, max);
+        return dist(rng_);
+    }
+
+private:
+    std::mt19937 rng_;
 };
 
 class DataSet {
+public:
+    DataSet(size_T count, size_t key_size, size_t value_size, uint32_t seed = 42) {
+        RandomGenerator rng(seed);
+        keys.reserve(count);
+        values_.reserve(count);
+        for(size_t i=0; i<count; i++) {
+            keys_.push_back(rng.string(key_size));
+            values_.push_back(rng.string(value_size));
+        }
+    }
 
+    const std::string& key(size_t i) const {return keys_[i%keys_.size()];}
+    const std::string& value(size_t i) const {return values_[i%values_.size()];}
+    size_t size() const {return keys_.size();}
+
+private:
+    std::vector<std::string> keys_;
+    std::vector<std::string> values_;
 };
 
 inline void print_header(const std::string& title) {
