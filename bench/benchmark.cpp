@@ -3,16 +3,7 @@
 #include "kvstore/net/server/server.hpp"
 #include "kvstore/net/client/client.hpp"
 
-#include <chrono>
-#include <filesystem>
-#include <iomanip>
-#include <iostream>
-#include <random>
-#include <string>
-#include <vector>
-
 using namespace kvstore;
-using Clock = std::chrono::high_resolution_clock;
 
 struct BenchmarkResult {
     std::string name;
@@ -20,6 +11,24 @@ struct BenchmarkResult {
     double total_seconds;
     double ops_per_second;
     double avg_latency_us;
+};
+
+struct LatencyResult {
+    std::string name;
+    size_t operations;
+    double p50_us;
+    double p90_us;
+    double p99_us;
+    double p999_us;
+    double max_us;
+}
+
+struct MultiThreadResult {
+    std::string name;
+    size_t num_threads;
+    size_t total_operations;
+    double total_seconds;
+    double ops_per_second;
 };
 
 void print_result(const BenchmarkResult& result) {
@@ -31,6 +40,27 @@ void print_result(const BenchmarkResult& result) {
               << std::endl;
 }
 
+void print_latency(const LatencyResult& result) {
+    std::cout << std::left << std::setw(45) << result.name
+              << std::right
+              << "  p50=" << std::setw(8) << std::fixed << std::setprecision(2) << result.p50_us << " us"
+              << "  p90=" << std::setw(8) << std::fixed << std::setprecision(2) << result.p90_us << " us"
+              << "  p99=" << std::setw(8) << std::fixed << std::setprecision(2) << result.p99_us << " us"
+              << "  p99.9=" << std::setw(8) << std::fixed << std::setprecision(2) << result.p999_us << " us"
+              << "  max=" << std::setw(8) << std::fixed << std::setprecision(2) << result.max_us << " us"
+              << std::endl;
+}
+
+void print_multithread(const MultiThreadResult& result){
+    std::cout << std::left << std::setw(45) << result.name
+              << std::right
+              << "  threads=" << std::setw(2) << result.num_threads
+              << "  ops=" << std::setw(10) << result.total_operations
+              << "  time=" << std::setw(8) << std::fixed << std::setprecision(2) << result.total_seconds << " s"
+              << "  throughput=" << std::setw(10) << std::fixed << std::setprecision(0) << result.ops_per_second << " ops/s"
+              << std::endl;
+}
+
 std::string random_string(size_t length, std::mt19937& rng) {
     static const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     std::uniform_int_distribution<size_t> dist(0, sizeof(charset) - 2);
@@ -39,6 +69,13 @@ std::string random_string(size_t length, std::mt19937& rng) {
         result[i] = charset[dist(rng)];
     }
     return result;
+}
+
+double percentile(std::vector<double>&latencies, double p) {
+    if(latencies.empty()) return 0.0;
+    size_t idx = static_cast<size_t>(p*latencies.size());
+    if(idx >= latencies.size()) idx = latencies.size() - 1;
+    return latencies[idx];
 }
 
 // =========================================================================================
@@ -191,12 +228,27 @@ BenchmarkResult bench_client_ping(net::client::Client& client, size_t count) {
 }
 
 // =========================================================================================
+// diskstore benchmarks
+// =========================================================================================
+
+// =========================================================================================
+// latency histograms
+// =========================================================================================
+
+// =========================================================================================
+// multi-threaded client benchmark
+// =========================================================================================
+
+// =========================================================================================
 // main
 // =========================================================================================
 
 int main(int argc, char* argv[]) {
     size_t ops = 100000;
     bool run_network = true;
+    bool run_disk = true;
+    bool run_latency = true;
+    bool run_multithread = true;
     bool use_binary = false;
 
     for(int i=1; i<argc; ++i) {
@@ -205,15 +257,24 @@ int main(int argc, char* argv[]) {
             ops = std::stoull(argv[++i]);
         } else if(arg == "--no-network") {
             run_network = false;
+        } else if(arg == "--no-disk") {
+            run_disk = false;
+        } else if(arg == "--no-latency") {
+            run_latency = false;
+        } else if(arg == "--no-multithread") {
+            run_multithread = false;
         } else if (arg == "--binary") {
             use_binary = true;
         } else if (arg == "--help") {
             std::cout << "Usage: " << argv[0] << " [options]\n"
                       << "Options:\n"
-                      << "  --ops N         number of operatiosn (default: 100000)\n"
-                      << "  --no-network    skip network benchmarks\n"
-                      << "  --binary        use binary protocol for network tests\n"
-                      << "  --help          show this help\n";
+                      << "  --ops N           number of operatiosn (default: 100000)\n"
+                      << "  --no-disk         skip DiskStore benchmarks\n"
+                      << "  --no-network      skip network throughput benchmarks\n"
+                      << "  --no-latency      skip network latency histogram benchmarks\n"
+                      << "  --no-multithread  skip multi-threaded benchmarks\n"
+                      << "  --binary          use binary protocol for network tests\n"
+                      << "  --help            show this help\n";
             return 0;
         }           
     }
@@ -245,8 +306,11 @@ int main(int argc, char* argv[]) {
         print_result(bench_store_mixed(store, ops, 0.5));
     }
     std::cout << std::endl;
+    
+    // DiskStore benchmarks -------------------------------------------------------------
 
-    // network benchmarks -------------------------------------------------------------
+
+    // network throughput benchmarks -------------------------------------------------------------
     if(run_network) {
         std::cout << "--- Network (" << (use_binary ? "binary" : "text") << " protocol) ---" << std::endl;
 
@@ -277,6 +341,10 @@ int main(int argc, char* argv[]) {
         client.disconnect();
         server.stop();
     }
+
+    // network latency benchmarks -------------------------------------------------------------
+
+    // multithreading benchmarks -------------------------------------------------------------
 
     std::cout << std::endl;
     std::cout << "Benchmark complete" << std::endl;
