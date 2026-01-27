@@ -14,7 +14,6 @@ std::string to_upper(std::string str) {
 
 }  // namespace
 
-
 std::string TextProtocol::encode_request(const Request& req) {
     std::string line = command_to_string(req.command);
 
@@ -93,7 +92,8 @@ Request TextProtocol::decode_request(const std::string& line) {
             if (args.size() >= 2) {
                 req.key = args[0];
                 for (size_t i = 1; i < args.size(); ++i) {
-                    if (i > 1) req.value += " ";
+                    if (i > 1)
+                        req.value += " ";
                     req.value += args[i];
                 }
             }
@@ -104,7 +104,8 @@ Request TextProtocol::decode_request(const std::string& line) {
                 req.key = args[0];
                 req.ttl_ms = std::stoll(args[1]);
                 for (size_t i = 2; i < args.size(); ++i) {
-                    if (i > 2) req.value += " ";
+                    if (i > 2)
+                        req.value += " ";
                     req.value += args[i];
                 }
             }
@@ -145,31 +146,50 @@ Response TextProtocol::decode_response(const std::string& line) {
 
 std::string TextProtocol::command_to_string(Command cmd) {
     switch (cmd) {
-        case Command::Get:     return "GET";
-        case Command::Put:     return "PUT";
-        case Command::PutEx:   return "PUTEX";
-        case Command::Del:     return "DEL";
-        case Command::Exists:  return "EXISTS";
-        case Command::Size:    return "SIZE";
-        case Command::Clear:   return "CLEAR";
-        case Command::Ping:    return "PING";
-        case Command::Quit:    return "QUIT";
-        case Command::Unknown: return "UNKNOWN";
+        case Command::Get:
+            return "GET";
+        case Command::Put:
+            return "PUT";
+        case Command::PutEx:
+            return "PUTEX";
+        case Command::Del:
+            return "DEL";
+        case Command::Exists:
+            return "EXISTS";
+        case Command::Size:
+            return "SIZE";
+        case Command::Clear:
+            return "CLEAR";
+        case Command::Ping:
+            return "PING";
+        case Command::Quit:
+            return "QUIT";
+        case Command::Unknown:
+            return "UNKNOWN";
     }
     return "UNKNOWN";
 }
 
 Command TextProtocol::parse_command(const std::string& str) {
     std::string upper = to_upper(str);
-    if (upper == "GET") return Command::Get;
-    if (upper == "PUT" || upper == "SET") return Command::Put;
-    if (upper == "PUTEX" || upper == "SETEX") return Command::PutEx;
-    if (upper == "DEL" || upper == "DELETE" || upper == "REMOVE") return Command::Del;
-    if (upper == "EXISTS" || upper == "CONTAINS") return Command::Exists;
-    if (upper == "SIZE" || upper == "COUNT") return Command::Size;
-    if (upper == "CLEAR") return Command::Clear;
-    if (upper == "PING") return Command::Ping;
-    if (upper == "QUIT" || upper == "EXIT") return Command::Quit;
+    if (upper == "GET")
+        return Command::Get;
+    if (upper == "PUT" || upper == "SET")
+        return Command::Put;
+    if (upper == "PUTEX" || upper == "SETEX")
+        return Command::PutEx;
+    if (upper == "DEL" || upper == "DELETE" || upper == "REMOVE")
+        return Command::Del;
+    if (upper == "EXISTS" || upper == "CONTAINS")
+        return Command::Exists;
+    if (upper == "SIZE" || upper == "COUNT")
+        return Command::Size;
+    if (upper == "CLEAR")
+        return Command::Clear;
+    if (upper == "PING")
+        return Command::Ping;
+    if (upper == "QUIT" || upper == "EXIT")
+        return Command::Quit;
     return Command::Unknown;
 }
 

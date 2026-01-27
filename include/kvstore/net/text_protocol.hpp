@@ -1,15 +1,15 @@
 #ifndef KVSTORE_NET_TEXT_PROTOCOL_HPP
 #define KVSTORE_NET_TEXT_PROTOCOL_HPP
 
-#include "kvstore/net/types.hpp"
-
 #include <string>
 #include <vector>
+
+#include "kvstore/net/types.hpp"
 
 namespace kvstore::net {
 
 class TextProtocol {
-public:
+   public:
     // Encode
     static std::string encode_request(const Request& req);
     static std::string encode_response(const Response& resp);

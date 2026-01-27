@@ -50,12 +50,12 @@ void WriteAheadLog::write_header() {
 
 bool WriteAheadLog::validate_header(std::ifstream& in) {
     uint32_t magic;
-    if(!util::read_int<uint32_t>(in, magic) || magic != kMagic) {
+    if (!util::read_int<uint32_t>(in, magic) || magic != kMagic) {
         return false;
     }
 
-    uint32_t version; 
-    if(!util::read_int<uint32_t>(in, version) || version != kVersion) {
+    uint32_t version;
+    if (!util::read_int<uint32_t>(in, version) || version != kVersion) {
         return false;
     }
     return true;
@@ -103,10 +103,10 @@ bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& 
     // we return bool instead of throwing because end of file is expected, not exceptional
     // not being able to read successfully is an expected pattern eventually
     uint8_t type_byte;
-    if(!util::read_int<uint8_t>(in, type_byte)){
+    if (!util::read_int<uint8_t>(in, type_byte)) {
         return false;
     }
-    
+
     type = static_cast<EntryType>(type_byte);
     if (!util::read_string(in, key)) {
         return false;
@@ -116,7 +116,7 @@ bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& 
     }
     if (type == EntryType::PutWithTTL) {
         int64_t expires_at_ms;
-        if(!util::read_int<int64_t>(in, expires_at_ms)) {
+        if (!util::read_int<int64_t>(in, expires_at_ms)) {
             return false;
         }
         expires_at = expires_at_ms;

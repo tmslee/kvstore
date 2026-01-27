@@ -75,7 +75,7 @@ void Snapshot::load(
     }
 
     uint64_t count;
-    if(!util::read_int<uint64_t>(in, count)) {
+    if (!util::read_int<uint64_t>(in, count)) {
         throw std::runtime_error("corrupt snapshot file");
     }
 
@@ -88,14 +88,14 @@ void Snapshot::load(
             throw std::runtime_error("corrupted snapshot file");
         }
         uint8_t has_expiration;
-        if(!util::read_int<uint8_t>(in, has_expiration)){
+        if (!util::read_int<uint8_t>(in, has_expiration)) {
             throw std::runtime_error("corrupted snapshot file");
         }
-       
+
         util::ExpirationTime expires_at = std::nullopt;
         if (has_expiration != 0) {
             int64_t expires_at_ms;
-            if(!util::read_int<int64_t>(in, expires_at_ms)){
+            if (!util::read_int<int64_t>(in, expires_at_ms)) {
                 throw std::runtime_error("corrupted snapshot file");
             }
             expires_at = expires_at_ms;
@@ -120,12 +120,12 @@ std::size_t Snapshot::entry_count() const {
 
 bool Snapshot::validate_header(std::ifstream& in) {
     uint32_t magic;
-    if(!util::read_int<uint32_t>(in, magic) || magic != kMagic) {
+    if (!util::read_int<uint32_t>(in, magic) || magic != kMagic) {
         return false;
     }
 
-    uint32_t version; 
-    if(!util::read_int<uint32_t>(in, version) || version != kVersion) {
+    uint32_t version;
+    if (!util::read_int<uint32_t>(in, version) || version != kVersion) {
         return false;
     }
     return true;

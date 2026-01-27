@@ -118,6 +118,15 @@ class Server::Impl {
                                      ": " + std::string(strerror(errno)));
         }
 
+        // query actual bound port (for options_.port is 0)
+        sockaddr_in bound_addr{};
+        socklen_t bound_len = sizeof(bound_addr);
+        if (getsockname(fd, reinterpret_cast<sockaddr*>(&bound_addr), &bound_len) == 0) {
+            actual_port_ = ntohs(bound_addr.sin_port);
+        } else {
+            actual_port_ = options_.port;
+        }
+
         // mark socket as listening - SOMAXCONN is max backlog of pending connections
         if (listen(fd, SOMAXCONN) < 0) {
             close(fd);
@@ -172,7 +181,7 @@ class Server::Impl {
     }
 
     [[nodiscard]] uint16_t port() const noexcept {
-        return options_.port;
+        return actual_port_;
     }
 
    private:
@@ -267,7 +276,7 @@ class Server::Impl {
     void handle_client(int client_fd, ClientInfo* info) {
         try {
             auto handler = create_protocol_handler(client_fd, options_.binary_only);
-            if(!handler) {
+            if (!handler) {
                 close(client_fd);
                 info->finished.store(true);
                 return;
@@ -276,19 +285,19 @@ class Server::Impl {
             // implicitly calls load()
             while (running_) {
                 auto request = handler->read_request(client_fd);
-                if(!request) {
+                if (!request) {
                     break;
                 }
                 Response response;
-                try{
+                try {
                     response = process_request(*request);
                 } catch (const std::exception& e) {
                     response = Response::error(std::string("internal error: ") + e.what());
                 } catch (...) {
                     response = Response::error("internal error");
                 }
-                
-                if(!handler->write_response(client_fd, response) || response.close_connection) {
+
+                if (!handler->write_response(client_fd, response) || response.close_connection) {
                     break;
                 }
             }
@@ -371,6 +380,8 @@ class Server::Impl {
     core::IStore& store_;
     ServerOptions options_;
 
+    uint16_t actual_port_{0};
+
     std::atomic<int> server_fd_{-1};
     // server_fd_ needs to be atomic bc it gets written by main thread in stop()
     // while its read in accept_loop() by another thread.
@@ -404,4 +415,4 @@ uint16_t Server::port() const noexcept {
     return impl_->port();
 }
 
-}  // namespace kvstore::net
+}  // namespace kvstore::net::server

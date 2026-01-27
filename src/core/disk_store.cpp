@@ -196,7 +196,7 @@ class DiskStore::Impl {
 
             // fetch type, key, value, expiration time
             uint8_t entry_type;
-            if(!util::read_int<uint8_t>(data_file_, entry_type)) {
+            if (!util::read_int<uint8_t>(data_file_, entry_type)) {
                 break;
             }
             std::string key;
@@ -208,14 +208,14 @@ class DiskStore::Impl {
                 break;
             }
             uint8_t has_expiration;
-            if(!util::read_int<uint8_t>(data_file_, has_expiration)){
+            if (!util::read_int<uint8_t>(data_file_, has_expiration)) {
                 break;
             }
-           
+
             std::optional<util::TimePoint> expires_at = std::nullopt;
             if (has_expiration != 0) {
                 uint64_t expires_at_ms;
-                if(!util::read_int<uint64_t>(data_file_, expires_at_ms)){
+                if (!util::read_int<uint64_t>(data_file_, expires_at_ms)) {
                     break;
                 }
                 expires_at = util::from_epoch_ms(expires_at_ms);
@@ -347,7 +347,8 @@ class DiskStore::Impl {
                 uint8_t has_expiration = entry.expires_at.has_value() ? 1 : 0;
                 util::write_int<uint8_t>(temp_file, has_expiration);
                 if (entry.expires_at.has_value()) {
-                    util::write_int<uint64_t>(temp_file, util::to_epoch_ms(entry.expires_at.value()));
+                    util::write_int<uint64_t>(temp_file,
+                                              util::to_epoch_ms(entry.expires_at.value()));
                 }
 
                 new_index[key] = IndexEntry{new_offset, static_cast<uint32_t>(value.size()),
@@ -364,15 +365,14 @@ class DiskStore::Impl {
         tombstone_count_ = 0;
     }
 
-
     bool validate_header() {
         uint32_t magic;
-        if(!util::read_int<uint32_t>(data_file_, magic) || magic != kMagic) {
+        if (!util::read_int<uint32_t>(data_file_, magic) || magic != kMagic) {
             return false;
         }
 
-        uint32_t version; 
-        if(!util::read_int<uint32_t>(data_file_, version) || version != kVersion) {
+        uint32_t version;
+        if (!util::read_int<uint32_t>(data_file_, version) || version != kVersion) {
             return false;
         }
         return true;

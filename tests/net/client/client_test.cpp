@@ -272,4 +272,98 @@ TEST_F(ClientDiskStoreTest, MultipleOperations) {
     }
 }
 
+class BinaryClientTest : public ::testing::Test {
+   protected:
+    void SetUp() override {
+        store_ = std::make_unique<core::Store>();
+
+        server::ServerOptions server_opts;
+        server_opts.port = 0;  // Let OS pick port
+        server_ = std::make_unique<server::Server>(*store_, server_opts);
+        server_->start();
+
+        client::ClientOptions client_opts;
+        client_opts.port = server_->port();
+        client_opts.binary = true;
+        client_ = std::make_unique<client::Client>(client_opts);
+        client_->connect();
+    }
+
+    void TearDown() override {
+        client_->disconnect();
+        server_->stop();
+    }
+
+    std::unique_ptr<core::Store> store_;
+    std::unique_ptr<server::Server> server_;
+    std::unique_ptr<client::Client> client_;
+};
+
+TEST_F(BinaryClientTest, Ping) {
+    EXPECT_TRUE(client_->ping());
+}
+
+TEST_F(BinaryClientTest, PutAndGet) {
+    client_->put("key1", "value1");
+
+    auto result = client_->get("key1");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, "value1");
+}
+
+TEST_F(BinaryClientTest, GetMissing) {
+    auto result = client_->get("nonexistent");
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(BinaryClientTest, Remove) {
+    client_->put("key1", "value1");
+
+    EXPECT_TRUE(client_->remove("key1"));
+    EXPECT_FALSE(client_->contains("key1"));
+    EXPECT_FALSE(client_->remove("key1"));
+}
+
+TEST_F(BinaryClientTest, Contains) {
+    EXPECT_FALSE(client_->contains("key1"));
+
+    client_->put("key1", "value1");
+    EXPECT_TRUE(client_->contains("key1"));
+}
+
+TEST_F(BinaryClientTest, Size) {
+    EXPECT_EQ(client_->size(), 0);
+
+    client_->put("key1", "value1");
+    EXPECT_EQ(client_->size(), 1);
+
+    client_->put("key2", "value2");
+    EXPECT_EQ(client_->size(), 2);
+}
+
+TEST_F(BinaryClientTest, Clear) {
+    client_->put("key1", "value1");
+    client_->put("key2", "value2");
+
+    client_->clear();
+    EXPECT_EQ(client_->size(), 0);
+}
+
+TEST_F(BinaryClientTest, BinaryData) {
+    std::string binary_value("\x00\x01\x02\xFF\xFE", 5);
+    client_->put("binkey", binary_value);
+
+    auto result = client_->get("binkey");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, binary_value);
+}
+
+TEST_F(BinaryClientTest, PutWithTTL) {
+    client_->put("ttlkey", "ttlvalue", util::Duration(60000));
+
+    auto result = client_->get("ttlkey");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, "ttlvalue");
+}
+
 }  // namespace kvstore::net::test

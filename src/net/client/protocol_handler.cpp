@@ -1,8 +1,9 @@
 #include "kvstore/net/client/protocol_handler.hpp"
-#include "kvstore/net/binary_protocol.hpp"
-#include "kvstore/net/text_protocol.hpp"
 
 #include <sys/socket.h>
+
+#include "kvstore/net/binary_protocol.hpp"
+#include "kvstore/net/text_protocol.hpp"
 
 namespace kvstore::net::client {
 
@@ -11,9 +12,9 @@ namespace {
 bool send_all(int fd, const void* data, size_t len) {
     const uint8_t* ptr = static_cast<const uint8_t*>(data);
     size_t total_sent = 0;
-    while(total_sent < len) {
-        ssize_t sent = send(fd, ptr+total_sent, len-total_sent, 0);
-        if(sent <= 0) {
+    while (total_sent < len) {
+        ssize_t sent = send(fd, ptr + total_sent, len - total_sent, 0);
+        if (sent <= 0) {
             return false;
         }
         total_sent += sent;
@@ -23,26 +24,26 @@ bool send_all(int fd, const void* data, size_t len) {
 
 std::string read_line(int fd, std::string& buffer) {
     char c;
-    while(true) {
+    while (true) {
         size_t pos = buffer.find('\n');
-        if(pos != std::string::npos) {
+        if (pos != std::string::npos) {
             std::string line = buffer.substr(0, pos);
-            buffer.erase(0, pos+1);
-            if(!line.empty() && line.back() == '\r') {
+            buffer.erase(0, pos + 1);
+            if (!line.empty() && line.back() == '\r') {
                 line.pop_back();
             }
             return line;
         }
 
         ssize_t n = recv(fd, &c, 1, 0);
-        if(n <= 0) {
+        if (n <= 0) {
             return "";
         }
         buffer += c;
     }
 }
 
-} //namespace
+}  // namespace
 
 bool TextProtocolHandler::write_request(int fd, const Request& request) {
     std::string data = TextProtocol::encode_request(request);
@@ -79,7 +80,6 @@ std::optional<Response> BinaryProtocolHandler::read_response(int fd) {
     return resp;
 }
 
-
 std::unique_ptr<IProtocolHandler> create_protocol_handler(bool binary) {
     if (binary) {
         return std::make_unique<BinaryProtocolHandler>();
@@ -87,4 +87,4 @@ std::unique_ptr<IProtocolHandler> create_protocol_handler(bool binary) {
     return std::make_unique<TextProtocolHandler>();
 }
 
-} //namespace kvstore::net::client
+}  // namespace kvstore::net::client

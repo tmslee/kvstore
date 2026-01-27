@@ -1,18 +1,18 @@
 #ifndef KVSTORE_NET_CLIENT_PROTOCOL_HANDLER_HPP
 #define KVSTORE_NET_CLIENT_PROTOCOL_HANDLER_HPP
 
-#include "kvstore/net/types.hpp"
-
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "kvstore/net/types.hpp"
+
 namespace kvstore::net::client {
 
 class IProtocolHandler {
-public:
+   public:
     virtual ~IProtocolHandler() = default;
 
     [[nodiscard]] virtual bool write_request(int fd, const Request& request) = 0;
@@ -20,20 +20,20 @@ public:
 };
 
 class TextProtocolHandler : public IProtocolHandler {
-public:
+   public:
     [[nodiscard]] bool write_request(int fd, const Request& request) override;
     [[nodiscard]] std::optional<Response> read_response(int fd) override;
 
-private:
+   private:
     std::string buffer_;
 };
 
 class BinaryProtocolHandler : public IProtocolHandler {
-public:
+   public:
     [[nodiscard]] bool write_request(int fd, const Request& request) override;
     [[nodiscard]] std::optional<Response> read_response(int fd) override;
 
-private:
+   private:
     std::vector<uint8_t> buffer_;
 };
 

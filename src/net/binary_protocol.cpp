@@ -1,8 +1,9 @@
 #include "kvstore/net/binary_protocol.hpp"
-#include "kvstore/util/binary_io.hpp"
 
 #include <cstring>
 #include <stdexcept>
+
+#include "kvstore/util/binary_io.hpp"
 
 /*
     write format:
@@ -38,7 +39,8 @@ std::vector<uint8_t> BinaryProtocol::encode_request(const Request& req) {
         case Command::PutEx:
             util::write_string(payload, req.key);
             util::write_string(payload, req.value);
-            util::write_int<uint64_t>(payload, static_cast<uint64_t>(req.ttl_ms)); // key + val + ttl
+            util::write_int<uint64_t>(payload,
+                                      static_cast<uint64_t>(req.ttl_ms));  // key + val + ttl
             break;
         default:
             break;
@@ -47,13 +49,13 @@ std::vector<uint8_t> BinaryProtocol::encode_request(const Request& req) {
     std::vector<uint8_t> result;
     result.reserve(4 + payload.size());
     util::write_int<uint32_t>(result, static_cast<uint32_t>(payload.size()));  // prepend length
-    result.insert(result.end(), payload.begin(), payload.end());     // insert payload
+    result.insert(result.end(), payload.begin(), payload.end());               // insert payload
 
     return result;
 }
 
 std::optional<Request> BinaryProtocol::decode_request(const std::vector<uint8_t>& data,
-                                                            size_t& bytes_consumed) {
+                                                      size_t& bytes_consumed) {
     // need atleast 4 bytes for length
     if (data.size() < 4) {
         return std::nullopt;
@@ -96,7 +98,8 @@ std::optional<Request> BinaryProtocol::decode_request(const std::vector<uint8_t>
             if (offset + 8 > max_offset) {
                 throw std::runtime_error("Incomplete TTL");
             }
-            req.ttl_ms = static_cast<int64_t>(util::read_int<uint64_t>(data.data(), offset, max_offset));
+            req.ttl_ms =
+                static_cast<int64_t>(util::read_int<uint64_t>(data.data(), offset, max_offset));
             offset += 8;
             break;
 
@@ -134,7 +137,7 @@ std::vector<uint8_t> BinaryProtocol::encode_response(const Response& resp) {
 }
 
 std::optional<Response> BinaryProtocol::decode_response(const std::vector<uint8_t>& data,
-                                                              size_t& bytes_consumed) {
+                                                        size_t& bytes_consumed) {
     if (data.size() < 4) {
         return std::nullopt;
     }

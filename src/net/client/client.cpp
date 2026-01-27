@@ -1,6 +1,4 @@
 #include "kvstore/net/client/client.hpp"
-#include "kvstore/net/client/protocol_handler.hpp"
-#include "kvstore/net/types.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -9,13 +7,17 @@
 
 #include <stdexcept>
 
+#include "kvstore/net/client/protocol_handler.hpp"
+#include "kvstore/net/types.hpp"
+
 namespace kvstore::net::client {
 
 namespace util = kvstore::util;
 
 class Client::Impl {
    public:
-    explicit Impl(const ClientOptions& options) : options_(options), protocol_(create_protocol_handler(options.binary)) {}
+    explicit Impl(const ClientOptions& options)
+        : options_(options), protocol_(create_protocol_handler(options.binary)) {}
 
     ~Impl() {
         disconnect();
@@ -75,7 +77,7 @@ class Client::Impl {
     */
     void put(std::string_view key, std::string_view value) {
         auto resp = execute({Command::Put, std::string(key), std::string(value), 0});
-        if(resp.status != Status::Ok) {
+        if (resp.status != Status::Ok) {
             throw std::runtime_error("PUT failed: " + resp.data);
         }
     }
@@ -100,18 +102,18 @@ class Client::Impl {
 
     [[nodiscard]] bool remove(std::string_view key) {
         auto resp = execute({Command::Del, std::string(key), "", 0});
-        if(resp.status == Status::NotFound) {
+        if (resp.status == Status::NotFound) {
             return false;
         }
-        if(resp.status != Status::Ok){
-           throw std::runtime_error("DEL failed: " + resp.data);
+        if (resp.status != Status::Ok) {
+            throw std::runtime_error("DEL failed: " + resp.data);
         }
         return true;
     }
 
     [[nodiscard]] bool contains(std::string_view key) {
         auto resp = execute({Command::Exists, std::string(key), "", 0});
-        if(resp.status != Status::Ok) {
+        if (resp.status != Status::Ok) {
             throw std::runtime_error("EXISTS failed: " + resp.data);
         }
         return resp.data == "1";
@@ -119,7 +121,7 @@ class Client::Impl {
 
     [[nodiscard]] std::size_t size() {
         auto resp = execute({Command::Size, "", "", 0});
-        if(resp.status != Status::Ok) {
+        if (resp.status != Status::Ok) {
             throw std::runtime_error("SIZE failed: " + resp.data);
         }
         return std::stoull(resp.data);
@@ -127,7 +129,7 @@ class Client::Impl {
 
     void clear() {
         auto resp = execute({Command::Clear, "", "", 0});
-        if(resp.status != Status::Ok) {
+        if (resp.status != Status::Ok) {
             throw std::runtime_error("CLEAR failed: " + resp.data);
         }
     }
@@ -143,17 +145,17 @@ class Client::Impl {
 
    private:
     Response execute(const Request& req) {
-        if(socket_fd_ < 0) {
+        if (socket_fd_ < 0) {
             throw std::runtime_error("Not connected");
         }
 
-        if(!protocol_->write_request(socket_fd_, req)) {
+        if (!protocol_->write_request(socket_fd_, req)) {
             disconnect();
             throw std::runtime_error("failed to send request");
         }
 
         auto resp = protocol_->read_response(socket_fd_);
-        if(!resp) {
+        if (!resp) {
             disconnect();
             throw std::runtime_error("Failed to receive response");
         }
@@ -204,4 +206,4 @@ void Client::clear() {
 bool Client::ping() {
     return impl_->ping();
 }
-}  // namespace kvstore::net
+}  // namespace kvstore::net::client
