@@ -85,6 +85,42 @@ TEST(TextProtocolTest, DecodeRequestCaseInsensitive) {
     EXPECT_EQ(req.command, Command::Get);
 }
 
+TEST(TextProtocolTest, DecodeRequestPutExInvalidTTL) {
+    auto req = TextProtocol::decode_request("PUTEX mykey notanumber myvalue");
+    EXPECT_EQ(req.command, Command::Unknown);
+}
+
+TEST(TextProtocolTest, DecodeRequestPutExMissingArgs) {
+    auto req = TextProtocol::decode_request("PUTEX mykey");
+    EXPECT_EQ(req.command, Command::Unknown);
+
+    req = TextProtocol::decode_request("PUTEX mykey 1000");
+    EXPECT_EQ(req.command, Command::Unknown);
+
+    req = TextProtocol::decode_request("PUTEX");
+    EXPECT_EQ(req.command, Command::Unknown);
+}
+
+TEST(TextProtocolTest, DecodeRequestGetMissingKey) {
+    auto req = TextProtocol::decode_request("GET");
+    EXPECT_EQ(req.command, Command::Unknown);
+}
+
+TEST(TextProtocolTest, DecodeRequestPutMissingValue) {
+    auto req = TextProtocol::decode_request("PUT mykey");
+    EXPECT_EQ(req.command, Command::Unknown);
+}
+
+TEST(TextProtocolTest, DecodeRequestDelMissingKey) {
+    auto req = TextProtocol::decode_request("DEL");
+    EXPECT_EQ(req.command, Command::Unknown);
+}
+
+TEST(TextProtocolTest, DecodeRequestExistsMissingKey) {
+    auto req = TextProtocol::decode_request("EXISTS");
+    EXPECT_EQ(req.command, Command::Unknown);
+}
+
 TEST(TextProtocolTest, DecodeRequestAliases) {
     EXPECT_EQ(TextProtocol::decode_request("SET k v").command, Command::Put);
     EXPECT_EQ(TextProtocol::decode_request("SETEX k 100 v").command, Command::PutEx);
