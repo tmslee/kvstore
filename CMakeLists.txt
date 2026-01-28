@@ -69,8 +69,15 @@ target_include_directories(kvstore
 add_executable(kvstore-server
     bin/server_main.cpp
 )
-
 target_link_libraries(kvstore-server
+    PRIVATE
+        kvstore
+)
+
+add_executable(kvstore-benchmark
+    bench/benchmark.cpp
+)
+target_link_libraries(kvstore-benchmark
     PRIVATE
         kvstore
 )
