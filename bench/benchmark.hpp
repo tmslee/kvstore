@@ -23,11 +23,11 @@ struct ThroughputResult {
     double avg_latency_us() const {return (total_seconds * 1'000'000) / operations;}
     
     void print() const {
-        std::cout << std::left << std::setw(50) << name
+        std::cout << std::left << std::setw(25) << name
                   << std::right << std::setw(10) << operations << " ops"
-                  << std::setw(12) << std::fixed << std::setprecision(2) << total_seconds << " s"
-                  << std::setw(12) << std::fixed << std::setprecision(0) << ops_per_second() << " ops/s"
-                  << std::setw(10) << std::fixed << std::setprecision(2) << avg_latency_us() << " us"
+                  << "  elapsed time=" << std::fixed << std::setprecision(2) << total_seconds << " s"
+                  << "  throughput=" << std::fixed << std::setprecision(0) << ops_per_second() << " ops/s"
+                  << "  avg latency=" << std::fixed << std::setprecision(2) << avg_latency_us() << " us"
                   << std::endl;
     }
 };
@@ -49,13 +49,13 @@ struct LatencyResult {
     }
 
     void print() const {
-        std::cout << std::left << std::setw(50) << name
+        std::cout << std::left << std::setw(25) << name
                   << std::right
-                  << "  p50=" << std::setw(8) << std::fixed << std::setprecision(2) << percentile(0.50) << " us"
-                  << "  p90=" << std::setw(8) << std::fixed << std::setprecision(2) << percentile(0.90) << " us"
-                  << "  p99=" << std::setw(8) << std::fixed << std::setprecision(2) << percentile(0.99) << " us"
-                  << "  p99.9=" << std::setw(8) << std::fixed << std::setprecision(2) << percentile(0.999) << " us"
-                  << "  max=" << std::setw(8) << std::fixed << std::setprecision(2) << latencies_us.back() << " us"
+                  << "  p50=" << std::fixed << std::setprecision(2) << percentile(0.50) << " us"
+                  << "  p90=" << std::fixed << std::setprecision(2) << percentile(0.90) << " us"
+                  << "  p99=" << std::fixed << std::setprecision(2) << percentile(0.99) << " us"
+                  << "  p99.9=" << std::fixed << std::setprecision(2) << percentile(0.999) << " us"
+                  << "  max=" << std::fixed << std::setprecision(2) << latencies_us.back() << " us"
                   << std::endl;
     }
 };
@@ -67,12 +67,12 @@ struct MultiThreadResult {
     double total_seconds;
     double ops_per_second() const {return total_operations / total_seconds; }
     void print() const {
-        std::cout << std::left << std::setw(50) << name
+        std::cout << std::left << std::setw(25) << name
                   << std::right
-                  << "  threads=" << std::setw(2) << num_threads
-                  << "  ops=" << std::setw(10) << total_operations
-                  << "  time=" << std::setw(8) << std::fixed << std::setprecision(2) << total_seconds << " s"
-                  << "  throughput=" << std::setw(10) << std::fixed << std::setprecision(0) << ops_per_second() << " ops/s"
+                  << "  threads=" << num_threads
+                  << "  ops=" << total_operations
+                  << "  time=" << std::fixed << std::setprecision(2) << total_seconds << " s"
+                  << "  throughput=" << std::fixed << std::setprecision(0) << ops_per_second() << " ops/s"
                   << std::endl;
     }
 };
