@@ -52,7 +52,7 @@ void bench_store(core::IStore& store, const std::string& store_name, size_t ops)
         size_t i = 0;
         Benchmark("get")
             .run_throughput(ops, [&]() {
-                store.get("key" + std::to_string(i % ops));
+                (void) store.get("key" + std::to_string(i % ops));
                 ++i;
             })
             .print();
@@ -69,7 +69,7 @@ void bench_store(core::IStore& store, const std::string& store_name, size_t ops)
             .run_throughput(ops, [&]() {
                 size_t k = rng.uniform(0, ops-1);
                 if(rng.uniform_real() < 0.8) {
-                    store.get("key" + std::to_string(k));
+                    (void) store.get("key" + std::to_string(k));
                 } else {
                     store.put("key" + std::to_string(k), "newvalue");
                 }
@@ -199,7 +199,7 @@ MultiThreadResult bench_multithread(
 
     auto start = Clock::now();
     for(size_t t=0; t < num_threads; ++t) {
-        threads.emplace_back([&, t](){
+        threads.emplace_back([&](){
             net::client::ClientOptions opts;
             opts.port = server.port();
             opts.binary = binary;
