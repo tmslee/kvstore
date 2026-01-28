@@ -66,16 +66,47 @@ ctest --output-on-failure
 ### Starting the server
 ```bash
 # Default settings
-./kvstore_server
+./kvstore-server
 
 # With config file
-./kvstore_server --config /path/to/kvstore.conf
+./kvstore-server --config /path/to/kvstore.conf
 
 # With CLI options
-./kvstore_server --host 0.0.0.0 --port 6379 --data-dir /var/lib/kvstore
+./kvstore-server --host 0.0.0.0 --port 6379 --data-dir /var/lib/kvstore
 
 # All options
-./kvstore_server --help
+./kvstore-server --help
+```
+
+### Using the CLI client
+```bash
+# Start the client
+./kvstore_client
+
+# With options
+./kvstore_client --host 192.168.1.100 --port 6380 --binary --timeout 60
+
+# Example session
+$ ./kvstore_client
+Connected to 127.0.0.1:6379
+> PUT name Alice
+OK
+> GET name
+OK Alice
+> PUTEX session 60000 abc123
+OK
+> EXISTS session
+OK 1
+> SIZE
+OK 2
+> DEL name
+OK
+> PING
+OK PONG
+> HELP
+Commands: PUT, PUTEX, GET, DEL, EXISTS, SIZE, CLEAR, PING, QUIT
+> QUIT
+BYE
 ```
 
 ### Configuration
@@ -335,14 +366,14 @@ Strings are length-prefixed: `[4 bytes: length][data]`
 Run benchmarks:
 ```bash
 cd build
-./kvstore_benchmark
+./kvstore-benchmark
 
 # Options
-./kvstore_benchmark --ops 500000      # More operations
-./kvstore_benchmark --binary          # Use binary protocol
-./kvstore_benchmark --no-network      # Skip network tests
-./kvstore_benchmark --no-disk         # Skip disk tests
-./kvstore_benchmark --help            # All options
+./kvstore-benchmark --ops 500000      # More operations
+./kvstore-benchmark --binary          # Use binary protocol
+./kvstore-benchmark --no-network      # Skip network tests
+./kvstore-benchmark --no-disk         # Skip disk tests
+./kvstore-benchmark --help            # All options
 ```
 
 Sample results (localhost, single-threaded):

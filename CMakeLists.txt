@@ -74,6 +74,14 @@ target_link_libraries(kvstore-server
         kvstore
 )
 
+add_executable(kvstore-client
+    bin/client_main.cpp
+)
+target_link_libraries(kvstore-client
+    PRIVATE
+        kvstore
+)
+
 add_executable(kvstore-benchmark
     bench/benchmark.cpp
 )
