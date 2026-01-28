@@ -1,5 +1,5 @@
 # KVStore
-A high-performance key-value store written in C++17, featuring both in-memory and disk-based storage, TCP networking with text and binary protocols, TTL support, and comprehensive persistence.
+A high-performance key-value store written in C++20, featuring both in-memory and disk-based storage, TCP networking with text and binary protocols, TTL support, and comprehensive persistence.
 
 ## Features
 - **Multiple Storage Backends**
@@ -30,8 +30,8 @@ A high-performance key-value store written in C++17, featuring both in-memory an
 
 ## Building
 ### Requirements
-- C++17 compatible compiler (GCC 8+, Clang 7+)
-- CMake 3.14+
+- C++20 compatible compiler
+- CMake 3.20+
 - Google Test (fetched automatically)
 
 ### Build
