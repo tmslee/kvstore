@@ -73,54 +73,53 @@ Request TextProtocol::decode_request(const std::string& line) {
     Request req;
     req.command = parse_command(cmd_str);
 
-    std::vector<std::string> args;
-    std::string arg;
-    while (iss >> arg) {
-        args.push_back(arg);
-    }
-
     switch (req.command) {
         case Command::Get:
         case Command::Del:
         case Command::Exists:
-            if (args.empty()) {
+            if (!(iss >> req.key)) {
                 req.command = Command::Unknown;
-            } else {
-                req.key = args[0];
             }
             break;
 
-        case Command::Put:
-            if (args.size() < 2) {
+        case Command::Put: {
+            if (!(iss >> req.key)) {
                 req.command = Command::Unknown;
-            } else {
-                req.key = args[0];
-                for (size_t i = 1; i < args.size(); ++i) {
-                    if (i > 1)
-                        req.value += " ";
-                    req.value += args[i];
-                }
+                break;
+            }
+            // skip single space after key, then take rest of line as value (preserving spaces)
+            if (iss.peek() == ' ') {
+                iss.get();
+            }
+            std::getline(iss, req.value);
+            if (req.value.empty()) {
+                req.command = Command::Unknown;
             }
             break;
+        }
 
-        case Command::PutEx:
-            if (args.size() < 3) {
+        case Command::PutEx: {
+            std::string ttl_str;
+            if (!(iss >> req.key >> ttl_str)) {
                 req.command = Command::Unknown;
-            } else {
-                req.key = args[0];
-                try {
-                    req.ttl_ms = std::stoll(args[1]);
-                } catch (const std::exception&) {
-                    req.command = Command::Unknown;  // invalid TTL
-                    break;
-                }
-                for (size_t i = 2; i < args.size(); ++i) {
-                    if (i > 2)
-                        req.value += " ";
-                    req.value += args[i];
-                }
+                break;
+            }
+            try {
+                req.ttl_ms = std::stoll(ttl_str);
+            } catch (const std::exception&) {
+                req.command = Command::Unknown;
+                break;
+            }
+            // skip single space after ttl, then take rest of line as value (preserving spaces)
+            if (iss.peek() == ' ') {
+                iss.get();
+            }
+            std::getline(iss, req.value);
+            if (req.value.empty()) {
+                req.command = Command::Unknown;
             }
             break;
+        }
 
         default:
             break;

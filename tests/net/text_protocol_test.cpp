@@ -69,6 +69,29 @@ TEST(TextProtocolTest, DecodeRequestPutWithSpaces) {
     EXPECT_EQ(req.value, "hello world");
 }
 
+TEST(TextProtocolTest, DecodeRequestPutPreservesMultipleSpaces) {
+    auto req = TextProtocol::decode_request("PUT mykey hello    world");
+    EXPECT_EQ(req.command, Command::Put);
+    EXPECT_EQ(req.key, "mykey");
+    EXPECT_EQ(req.value, "hello    world");  // 4 spaces preserved
+}
+
+TEST(TextProtocolTest, DecodeRequestPutExWithSpaces) {
+    auto req = TextProtocol::decode_request("PUTEX mykey 5000 hello world");
+    EXPECT_EQ(req.command, Command::PutEx);
+    EXPECT_EQ(req.key, "mykey");
+    EXPECT_EQ(req.ttl_ms, 5000);
+    EXPECT_EQ(req.value, "hello world");
+}
+
+TEST(TextProtocolTest, DecodeRequestPutExPreservesMultipleSpaces) {
+    auto req = TextProtocol::decode_request("PUTEX mykey 5000 hello    world");
+    EXPECT_EQ(req.command, Command::PutEx);
+    EXPECT_EQ(req.key, "mykey");
+    EXPECT_EQ(req.ttl_ms, 5000);
+    EXPECT_EQ(req.value, "hello    world");  // 4 spaces preserved
+}
+
 TEST(TextProtocolTest, DecodeRequestPutEx) {
     auto req = TextProtocol::decode_request("PUTEX mykey 5000 myvalue");
     EXPECT_EQ(req.command, Command::PutEx);
