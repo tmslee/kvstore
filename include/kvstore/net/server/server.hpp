@@ -17,6 +17,12 @@ struct ServerOptions {
     int client_timeout_seconds = 300;  // 5 minutes
     bool binary_only = false;
     int cleanup_interval_ms = 1000;  // expired key cleanup interval (0 to disable)
+
+    // size limits to prevent memory exhaustion attacks
+    std::size_t max_message_size = 64 * 1024 * 1024;  // 64MB max message (binary protocol)
+    std::size_t max_key_size = 1024;                  // 1KB max key
+    std::size_t max_value_size = 64 * 1024 * 1024;    // 64MB max value
+    std::size_t max_line_size = 64 * 1024 * 1024;     // 64MB max line (text protocol)
 };
 
 class Server {
