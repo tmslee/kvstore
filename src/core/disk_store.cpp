@@ -88,7 +88,7 @@ class DiskStore::Impl {
         }
     }
 
-    // unique_lock required because read_value() uses lseek on shared fd
+    // unique_lock required because read_value_from_fd() uses lseek on shared fd
     [[nodiscard]] std::optional<std::string> get(std::string_view key) {
         std::unique_lock lock(mutex_);
 
@@ -97,7 +97,7 @@ class DiskStore::Impl {
             return std::nullopt;  // don't write tombstone, let cleanup_expired() handle it
         }
 
-        return read_value(it->second);
+        return read_value_from_fd(fd_, it->second.offset);
     }
 
     [[nodiscard]] bool remove(std::string_view key) {
@@ -196,7 +196,7 @@ class DiskStore::Impl {
 
     void compact() {
         std::unique_lock lock(mutex_);
-        do_compact();
+        do_compact_unlocked(lock);
     }
 
    private:
@@ -312,15 +312,15 @@ class DiskStore::Impl {
         }
     }
 
-    [[nodiscard]] std::string read_value(const IndexEntry& entry) {
-        lseek(fd_, entry.offset, SEEK_SET);
+    // Read value from any fd at a specific offset (for concurrent reads during compaction)
+    [[nodiscard]] static std::string read_value_from_fd(int fd, uint64_t offset) {
+        lseek(fd, offset, SEEK_SET);
         uint8_t entry_type;
-        util::read_int_fd<uint8_t>(fd_, entry_type);
+        util::read_int_fd<uint8_t>(fd, entry_type);
         std::string key;
-        util::read_string_fd(fd_, key);
+        util::read_string_fd(fd, key);
         std::string value;
-        util::read_string_fd(fd_, value);
-
+        util::read_string_fd(fd, value);
         return value;
     }
 
@@ -332,35 +332,51 @@ class DiskStore::Impl {
     }
 
     void try_auto_compact() {
+        // Check threshold under lock, but do_compact releases lock during I/O
         std::unique_lock lock(mutex_);
         if (tombstone_count_ >= options_.compaction_threshold) {
-            do_compact();
+            do_compact_unlocked(lock);
         }
     }
 
-    void do_compact() {
-        // compact grabs entries from our current index and builds a new data file with it.
-        // this just removes all the tombstones that might be present in our old data file
-        std::filesystem::path temp_path = data_path_.string() + ".tmp";
+    // Called with lock already held - releases during I/O phase
+    void do_compact_unlocked(std::unique_lock<std::shared_mutex>& lock) {
+        // Phase 1 (lock held): Snapshot index and record file position
+        std::vector<std::pair<std::string, IndexEntry>> snapshot;
+        snapshot.reserve(index_.size());
+        for (const auto& [key, entry] : index_) {
+            if (!is_expired(entry)) {
+                snapshot.emplace_back(key, entry);
+            }
+        }
+        uint64_t compaction_start_offset = lseek(fd_, 0, SEEK_END);
 
+        // Release lock during I/O-heavy phase
+        lock.unlock();
+
+        // Phase 2 (no lock): Write snapshot to temp file using separate read fd
+        std::filesystem::path temp_path = data_path_.string() + ".tmp";
         int temp_fd = open(temp_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (temp_fd < 0) {
+            lock.lock();  // Re-acquire before throwing
             throw std::runtime_error("failed to open temp file for compaction");
         }
 
+        int read_fd = open(data_path_.c_str(), O_RDONLY);
+        if (read_fd < 0) {
+            close(temp_fd);
+            std::filesystem::remove(temp_path);
+            lock.lock();
+            throw std::runtime_error("failed to open read fd for compaction");
+        }
+
+        // Write header
         util::write_int_fd<uint32_t>(temp_fd, kMagic);
         util::write_int_fd<uint32_t>(temp_fd, kVersion);
 
-        std::unordered_map<std::string, IndexEntry> new_index;
-
-        for (auto& [key, entry] : index_) {
-            if (is_expired(entry)) {
-                continue;
-            }
-
-            uint64_t new_offset = lseek(temp_fd, 0, SEEK_CUR);
-
-            std::string value = read_value(entry);
+        // Write all snapshotted entries
+        for (const auto& [key, entry] : snapshot) {
+            std::string value = read_value_from_fd(read_fd, entry.offset);
 
             util::write_int_fd<uint8_t>(temp_fd, kEntryRegular);
             util::write_string_fd(temp_fd, key);
@@ -371,9 +387,53 @@ class DiskStore::Impl {
             if (entry.expires_at.has_value()) {
                 util::write_int_fd<uint64_t>(temp_fd, util::to_epoch_ms(entry.expires_at.value()));
             }
+        }
 
-            new_index[key] = IndexEntry{new_offset, static_cast<uint32_t>(value.size()),
-                                        entry.expires_at, false};
+        close(read_fd);
+
+        // Phase 3 (lock held): Merge new writes, finalize, and swap
+        lock.lock();
+
+        // Read any entries written since compaction started and append to temp
+        uint64_t current_end = lseek(fd_, 0, SEEK_END);
+        if (current_end > compaction_start_offset) {
+            lseek(fd_, compaction_start_offset, SEEK_SET);
+
+            while (lseek(fd_, 0, SEEK_CUR) < static_cast<off_t>(current_end)) {
+                uint8_t entry_type;
+                if (!util::read_int_fd<uint8_t>(fd_, entry_type)) {
+                    break;
+                }
+                std::string key;
+                if (!util::read_string_fd(fd_, key)) {
+                    break;
+                }
+                std::string value;
+                if (!util::read_string_fd(fd_, value)) {
+                    break;
+                }
+                uint8_t has_expiration;
+                if (!util::read_int_fd<uint8_t>(fd_, has_expiration)) {
+                    break;
+                }
+                std::optional<int64_t> expires_at_ms;
+                if (has_expiration != 0) {
+                    int64_t exp;
+                    if (!util::read_int_fd<int64_t>(fd_, exp)) {
+                        break;
+                    }
+                    expires_at_ms = exp;
+                }
+
+                // Write to temp file (including tombstones - they represent recent deletes)
+                util::write_int_fd<uint8_t>(temp_fd, entry_type);
+                util::write_string_fd(temp_fd, key);
+                util::write_string_fd(temp_fd, value);
+                util::write_int_fd<uint8_t>(temp_fd, has_expiration);
+                if (expires_at_ms.has_value()) {
+                    util::write_int_fd<uint64_t>(temp_fd, expires_at_ms.value());
+                }
+            }
         }
 
         // fsync temp file before rename
@@ -402,7 +462,8 @@ class DiskStore::Impl {
 
         index_.clear();
         load_index();
-        tombstone_count_ = 0;
+        // Note: don't reset tombstone_count_ - load_index() sets it correctly
+        // (new writes during Phase 2 may include tombstones)
     }
 
     bool validate_header() {
