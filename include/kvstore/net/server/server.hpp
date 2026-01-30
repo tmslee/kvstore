@@ -16,6 +16,7 @@ struct ServerOptions {
     std::size_t max_connections = 1000;
     int client_timeout_seconds = 300;  // 5 minutes
     bool binary_only = false;
+    int cleanup_interval_ms = 1000;  // expired key cleanup interval (0 to disable)
 };
 
 class Server {

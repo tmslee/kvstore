@@ -7,6 +7,7 @@
 #include <shared_mutex>
 #include <stdexcept>
 #include <unordered_map>
+#include <vector>
 
 #include "kvstore/util/binary_io.hpp"
 
@@ -87,19 +88,13 @@ class DiskStore::Impl {
         }
     }
 
-    // design decision: we dont try to compact at get when we lazy delete an expired entry to keep
-    // reads fast.
+    // unique_lock required because read_value() uses lseek on shared fd
     [[nodiscard]] std::optional<std::string> get(std::string_view key) {
         std::unique_lock lock(mutex_);
 
         auto it = index_.find(std::string(key));
-        if (it == index_.end()) {
-            return std::nullopt;
-        }
-
-        if (is_expired(it->second)) {
-            append_entry(key, "", std::nullopt, true);
-            return std::nullopt;
+        if (it == index_.end() || is_expired(it->second)) {
+            return std::nullopt;  // don't write tombstone, let cleanup_expired() handle it
         }
 
         return read_value(it->second);
@@ -126,19 +121,12 @@ class DiskStore::Impl {
         return removed;
     }
 
-    // design decision: we dont try to compact at contains when we lazy delete an expired entry to
-    // keep reads fast.
     [[nodiscard]] bool contains(std::string_view key) {
-        std::unique_lock lock(mutex_);
+        std::shared_lock lock(mutex_);  // shared lock - reads don't modify data
 
         auto it = index_.find(std::string(key));
-        if (it == index_.end()) {
-            return false;
-        }
-
-        if (is_expired(it->second)) {
-            append_entry(key, "", std::nullopt, true);
-            return false;
+        if (it == index_.end() || is_expired(it->second)) {
+            return false;  // don't write tombstone, let cleanup_expired() handle it
         }
 
         return true;
@@ -179,6 +167,31 @@ class DiskStore::Impl {
 
     void flush() {
         compact();
+    }
+
+    void cleanup_expired() {
+        bool should_compact = false;
+        {
+            std::unique_lock lock(mutex_);
+
+            // collect expired keys first to avoid modifying index while iterating
+            std::vector<std::string> expired_keys;
+            for (const auto& [key, entry] : index_) {
+                if (is_expired(entry)) {
+                    expired_keys.push_back(key);
+                }
+            }
+
+            // write tombstones for expired entries
+            for (const auto& key : expired_keys) {
+                append_entry(key, "", std::nullopt, true);
+            }
+
+            should_compact = (tombstone_count_ >= options_.compaction_threshold);
+        }
+        if (should_compact) {
+            try_auto_compact();
+        }
     }
 
     void compact() {
@@ -449,6 +462,9 @@ void DiskStore::clear() {
 }
 void DiskStore::flush() {
     impl_->flush();
+}
+void DiskStore::cleanup_expired() {
+    impl_->cleanup_expired();
 }
 void DiskStore::compact() {
     impl_->compact();
