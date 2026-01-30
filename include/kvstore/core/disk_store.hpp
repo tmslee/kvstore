@@ -41,6 +41,7 @@ class DiskStore : public IStore {
 
     void clear() override;
     void flush() override;
+    void cleanup_expired() override;
     void compact();
 
    private:

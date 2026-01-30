@@ -25,6 +25,7 @@ class IStore {
 
     virtual void clear() = 0;
     virtual void flush() = 0;
+    virtual void cleanup_expired() = 0;
 };
 
 }  // namespace kvstore::core

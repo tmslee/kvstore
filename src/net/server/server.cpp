@@ -138,6 +138,11 @@ class Server::Impl {
         running_ = true;
         accept_thread_ = std::thread(&Impl::accept_loop, this);
 
+        // start cleanup thread if enabled
+        if (options_.cleanup_interval_ms > 0) {
+            cleanup_thread_ = std::thread(&Impl::cleanup_loop, this);
+        }
+
         LOG_INFO("Server started on " + options_.host + ":" + std::to_string(options_.port));
     }
 
@@ -161,6 +166,11 @@ class Server::Impl {
         // wait for accept thread to finish
         if (accept_thread_.joinable()) {
             accept_thread_.join();  // noexcept
+        }
+
+        // wait for cleanup thread to finish
+        if (cleanup_thread_.joinable()) {
+            cleanup_thread_.join();  // noexcept
         }
 
         // wait for all client handler threds to finish, then clear vector.
@@ -269,6 +279,19 @@ class Server::Impl {
                 it = clients_.erase(it);
             } else {
                 ++it;
+            }
+        }
+    }
+
+    void cleanup_loop() {
+        while (running_) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(options_.cleanup_interval_ms));
+            if (running_) {
+                try {
+                    store_.cleanup_expired();
+                } catch (const std::exception& e) {
+                    LOG_ERROR("Cleanup error: " + std::string(e.what()));
+                }
             }
         }
     }
@@ -388,6 +411,7 @@ class Server::Impl {
     std::atomic<bool> running_{false};
 
     std::thread accept_thread_;
+    std::thread cleanup_thread_;
 
     // important note: we use std::vector<std::unique_ptr<>> bceause vector reallocation will
     // invalidate address of stored objects. using a pointer alleviates this - heap objects have

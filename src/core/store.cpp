@@ -82,14 +82,10 @@ class Store::Impl {
     }
 
     [[nodiscard]] std::optional<std::string> get(std::string_view key) {
-        std::unique_lock lock(mutex_);
+        std::shared_lock lock(mutex_);  // shared lock - reads don't modify data
         auto it = data_.find(std::string(key));
-        if (it == data_.end()) {
-            return std::nullopt;
-        }
-        if (is_expired(it->second)) {
-            data_.erase(it);
-            return std::nullopt;
+        if (it == data_.end() || is_expired(it->second)) {
+            return std::nullopt;  // don't erase, let cleanup_expired() handle it
         }
         return it->second.value;
     }
@@ -114,14 +110,10 @@ class Store::Impl {
     }
 
     [[nodiscard]] bool contains(std::string_view key) {
-        std::unique_lock lock(mutex_);
+        std::shared_lock lock(mutex_);  // shared lock - reads don't modify data
         auto it = data_.find(std::string(key));
-        if (it == data_.end()) {
-            return false;
-        }
-        if (is_expired(it->second)) {
-            data_.erase(it);
-            return false;
+        if (it == data_.end() || is_expired(it->second)) {
+            return false;  // don't erase, let cleanup_expired() handle it
         }
         return true;
     }
