@@ -78,6 +78,12 @@ std::optional<Config> Config::load_file(const std::filesystem::path& path) {
             config.use_disk_store = (value == "true" || value == "1");
         } else if (key == "log_level") {
             config.log_level = parse_log_level(value);
+        } else if (key == "max_message_size") {
+            config.max_message_size = std::stoull(value);
+        } else if (key == "max_key_size") {
+            config.max_key_size = std::stoull(value);
+        } else if (key == "max_value_size") {
+            config.max_value_size = std::stoull(value);
         }
     }
 
@@ -103,6 +109,9 @@ std::optional<Config> Config::parse_args(int argc, char* argv[]) {
                 << "  --snapshot-threshold N     WAL entries before snapshot (default: 10000)\n"
                 << "  --compaction-threshold N   Tombstones before compaction (default: 1000)\n"
                 << "  --disk-store               Use disk-based storage\n"
+                << "  --max-message-size BYTES   Max message size in bytes (default: 67108864)\n"
+                << "  --max-key-size BYTES       Max key size in bytes (default: 1024)\n"
+                << "  --max-value-size BYTES     Max value size in bytes (default: 67108864)\n"
                 << "  -h, --help                 Show this help\n";
             return std::nullopt;
         }
@@ -124,6 +133,12 @@ std::optional<Config> Config::parse_args(int argc, char* argv[]) {
             config.compaction_threshold = std::stoull(argv[++i]);
         } else if (arg == "--disk-store") {
             config.use_disk_store = true;
+        } else if (arg == "--max-message-size" && i + 1 < argc) {
+            config.max_message_size = std::stoull(argv[++i]);
+        } else if (arg == "--max-key-size" && i + 1 < argc) {
+            config.max_key_size = std::stoull(argv[++i]);
+        } else if (arg == "--max-value-size" && i + 1 < argc) {
+            config.max_value_size = std::stoull(argv[++i]);
         } else if ((arg == "-c" || arg == "--config") && i + 1 < argc) {
             // Config file handled separately in main
             ++i;
@@ -154,6 +169,12 @@ Config Config::merge(const Config& file_config, const Config& cli_config, const 
         result.use_disk_store = file_config.use_disk_store;
     if (file_config.log_level != defaults.log_level)
         result.log_level = file_config.log_level;
+    if (file_config.max_message_size != defaults.max_message_size)
+        result.max_message_size = file_config.max_message_size;
+    if (file_config.max_key_size != defaults.max_key_size)
+        result.max_key_size = file_config.max_key_size;
+    if (file_config.max_value_size != defaults.max_value_size)
+        result.max_value_size = file_config.max_value_size;
 
     // CLI overrides file
     if (cli_config.host != defaults.host)
@@ -174,6 +195,12 @@ Config Config::merge(const Config& file_config, const Config& cli_config, const 
         result.use_disk_store = cli_config.use_disk_store;
     if (cli_config.log_level != defaults.log_level)
         result.log_level = cli_config.log_level;
+    if (cli_config.max_message_size != defaults.max_message_size)
+        result.max_message_size = cli_config.max_message_size;
+    if (cli_config.max_key_size != defaults.max_key_size)
+        result.max_key_size = cli_config.max_key_size;
+    if (cli_config.max_value_size != defaults.max_value_size)
+        result.max_value_size = cli_config.max_value_size;
 
     return result;
 }
