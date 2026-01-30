@@ -111,7 +111,8 @@ std::optional<Request> BinaryProtocolHandler::read_request(int fd) {
     buffer_.erase(buffer_.begin(), buffer_.begin() + consumed);
 
     // validate key/value sizes
-    if (req && (req->key.size() > limits_.max_key_size || req->value.size() > limits_.max_value_size)) {
+    if (req &&
+        (req->key.size() > limits_.max_key_size || req->value.size() > limits_.max_value_size)) {
         throw std::runtime_error("key or value too large");
     }
 
