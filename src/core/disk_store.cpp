@@ -1,6 +1,8 @@
 #include "kvstore/core/disk_store.hpp"
 
-#include <fstream>
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <mutex>
 #include <shared_mutex>
 #include <stdexcept>
@@ -38,25 +40,25 @@ class DiskStore::Impl {
 
         bool file_exists = std::filesystem::exists(data_path_);
 
-        // open file for read+write
-        data_file_.open(data_path_, std::ios::binary | std::ios::in | std::ios::out);
-        if (!data_file_.is_open()) {
-            data_file_.open(data_path_, std::ios::binary | std::ios::out);
-            data_file_.close();
-            data_file_.open(data_path_, std::ios::binary | std::ios::in | std::ios::out);
-        }
-
-        if (!data_file_.is_open()) {
+        // open file for read+write, create if doesn't exist
+        fd_ = open(data_path_.c_str(), O_RDWR | O_CREAT, 0644);
+        if (fd_ < 0) {
             throw std::runtime_error("failed to open data file: " + data_path_.string());
         }
 
         // write header if new file. existing file - rebuild index by reading entries
         if (!file_exists || std::filesystem::file_size(data_path_) == 0) {
-            util::write_int<uint32_t>(data_file_, kMagic);
-            util::write_int<uint32_t>(data_file_, kVersion);
-            data_file_.flush();
+            util::write_int_fd<uint32_t>(fd_, kMagic);
+            util::write_int_fd<uint32_t>(fd_, kVersion);
+            fsync(fd_);
         } else {
             load_index();
+        }
+    }
+
+    ~Impl() {
+        if (fd_ >= 0) {
+            close(fd_);
         }
     }
 
@@ -155,15 +157,20 @@ class DiskStore::Impl {
     void clear() {
         std::unique_lock lock(mutex_);
 
-        data_file_.close();
+        // close current fd
+        if (fd_ >= 0) {
+            close(fd_);
+        }
 
-        data_file_.open(data_path_, std::ios::binary | std::ios::out | std::ios::trunc);
-        util::write_int<uint32_t>(data_file_, kMagic);
-        util::write_int<uint32_t>(data_file_, kVersion);
-        data_file_.flush();
-        data_file_.close();
+        // reopen with O_TRUNC to delete all content
+        fd_ = open(data_path_.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+        if (fd_ < 0) {
+            throw std::runtime_error("failed to clear data file: " + data_path_.string());
+        }
 
-        data_file_.open(data_path_, std::ios::binary | std::ios::in | std::ios::out);
+        util::write_int_fd<uint32_t>(fd_, kMagic);
+        util::write_int_fd<uint32_t>(fd_, kVersion);
+        fsync(fd_);
 
         index_.clear();
         tombstone_count_ = 0;
@@ -182,40 +189,44 @@ class DiskStore::Impl {
    private:
     void load_index() {
         // go to beginning
-        data_file_.seekg(0);
+        lseek(fd_, 0, SEEK_SET);
 
         // header check
         if (!validate_header()) {
             throw std::runtime_error("Invalid data file: bad header");
         }
 
+        // get file size to know when we've reached the end
+        off_t file_size = lseek(fd_, 0, SEEK_END);
+        lseek(fd_, 8, SEEK_SET);  // skip header (magic + version = 8 bytes)
+
         // read every entry
-        while (data_file_.peek() != EOF) {
+        while (lseek(fd_, 0, SEEK_CUR) < file_size) {
             // keep current offset
-            uint64_t offset = data_file_.tellg();
+            uint64_t offset = lseek(fd_, 0, SEEK_CUR);
 
             // fetch type, key, value, expiration time
             uint8_t entry_type;
-            if (!util::read_int<uint8_t>(data_file_, entry_type)) {
+            if (!util::read_int_fd<uint8_t>(fd_, entry_type)) {
                 break;
             }
             std::string key;
-            if (!util::read_string(data_file_, key)) {
+            if (!util::read_string_fd(fd_, key)) {
                 break;
             }
             std::string value;
-            if (!util::read_string(data_file_, value)) {
+            if (!util::read_string_fd(fd_, value)) {
                 break;
             }
             uint8_t has_expiration;
-            if (!util::read_int<uint8_t>(data_file_, has_expiration)) {
+            if (!util::read_int_fd<uint8_t>(fd_, has_expiration)) {
                 break;
             }
 
             std::optional<util::TimePoint> expires_at = std::nullopt;
             if (has_expiration != 0) {
                 uint64_t expires_at_ms;
-                if (!util::read_int<uint64_t>(data_file_, expires_at_ms)) {
+                if (!util::read_int_fd<uint64_t>(fd_, expires_at_ms)) {
                     break;
                 }
                 expires_at = util::from_epoch_ms(expires_at_ms);
@@ -241,29 +252,26 @@ class DiskStore::Impl {
                 }
             }
         }
-
-        data_file_.clear();
     }
 
     void append_entry(std::string_view key, std::string_view value,
                       util::ExpirationTime expires_at_ms, bool is_tombstone) {
         // write to end of the file (append)
-        data_file_.seekp(0, std::ios::end);
-        uint64_t offset = data_file_.tellp();
+        uint64_t offset = lseek(fd_, 0, SEEK_END);
 
         // write entry
         uint8_t entry_type = is_tombstone ? kEntryTombstone : kEntryRegular;
-        util::write_int<uint8_t>(data_file_, entry_type);
-        util::write_string(data_file_, key);
-        util::write_string(data_file_, value);
+        util::write_int_fd<uint8_t>(fd_, entry_type);
+        util::write_string_fd(fd_, key);
+        util::write_string_fd(fd_, value);
 
         uint8_t has_expiration = expires_at_ms.has_value() ? 1 : 0;
-        util::write_int<uint8_t>(data_file_, has_expiration);
+        util::write_int_fd<uint8_t>(fd_, has_expiration);
         if (expires_at_ms.has_value()) {
-            util::write_int<uint64_t>(data_file_, expires_at_ms.value());
+            util::write_int_fd<uint64_t>(fd_, expires_at_ms.value());
         }
 
-        data_file_.flush();
+        // no fsync here for performance - caller can use flush() for durability
 
         // update index
         if (is_tombstone) {
@@ -292,13 +300,13 @@ class DiskStore::Impl {
     }
 
     [[nodiscard]] std::string read_value(const IndexEntry& entry) {
-        data_file_.seekg(entry.offset);
+        lseek(fd_, entry.offset, SEEK_SET);
         uint8_t entry_type;
-        util::read_int<uint8_t>(data_file_, entry_type);
+        util::read_int_fd<uint8_t>(fd_, entry_type);
         std::string key;
-        util::read_string(data_file_, key);
+        util::read_string_fd(fd_, key);
         std::string value;
-        util::read_string(data_file_, value);
+        util::read_string_fd(fd_, value);
 
         return value;
     }
@@ -321,44 +329,63 @@ class DiskStore::Impl {
         // compact grabs entries from our current index and builds a new data file with it.
         // this just removes all the tombstones that might be present in our old data file
         std::filesystem::path temp_path = data_path_.string() + ".tmp";
-        {
-            std::ofstream temp_file(temp_path, std::ios::binary);
-            if (!temp_file.is_open()) {
-                throw std::runtime_error("failed to open temp file for compaction");
-            }
-            util::write_int<uint32_t>(temp_file, kMagic);
-            util::write_int<uint32_t>(temp_file, kVersion);
 
-            std::unordered_map<std::string, IndexEntry> new_index;
-
-            for (auto& [key, entry] : index_) {
-                if (is_expired(entry)) {
-                    continue;
-                }
-
-                uint64_t new_offset = temp_file.tellp();
-
-                std::string value = read_value(entry);
-
-                util::write_int<uint8_t>(temp_file, kEntryRegular);
-                util::write_string(temp_file, key);
-                util::write_string(temp_file, value);
-
-                uint8_t has_expiration = entry.expires_at.has_value() ? 1 : 0;
-                util::write_int<uint8_t>(temp_file, has_expiration);
-                if (entry.expires_at.has_value()) {
-                    util::write_int<uint64_t>(temp_file,
-                                              util::to_epoch_ms(entry.expires_at.value()));
-                }
-
-                new_index[key] = IndexEntry{new_offset, static_cast<uint32_t>(value.size()),
-                                            entry.expires_at, false};
-            }
-            temp_file.flush();
+        int temp_fd = open(temp_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (temp_fd < 0) {
+            throw std::runtime_error("failed to open temp file for compaction");
         }
-        data_file_.close();
+
+        util::write_int_fd<uint32_t>(temp_fd, kMagic);
+        util::write_int_fd<uint32_t>(temp_fd, kVersion);
+
+        std::unordered_map<std::string, IndexEntry> new_index;
+
+        for (auto& [key, entry] : index_) {
+            if (is_expired(entry)) {
+                continue;
+            }
+
+            uint64_t new_offset = lseek(temp_fd, 0, SEEK_CUR);
+
+            std::string value = read_value(entry);
+
+            util::write_int_fd<uint8_t>(temp_fd, kEntryRegular);
+            util::write_string_fd(temp_fd, key);
+            util::write_string_fd(temp_fd, value);
+
+            uint8_t has_expiration = entry.expires_at.has_value() ? 1 : 0;
+            util::write_int_fd<uint8_t>(temp_fd, has_expiration);
+            if (entry.expires_at.has_value()) {
+                util::write_int_fd<uint64_t>(temp_fd, util::to_epoch_ms(entry.expires_at.value()));
+            }
+
+            new_index[key] = IndexEntry{new_offset, static_cast<uint32_t>(value.size()),
+                                        entry.expires_at, false};
+        }
+
+        // fsync temp file before rename
+        fsync(temp_fd);
+        close(temp_fd);
+
+        // close current fd before rename
+        close(fd_);
+
+        // rename temp to final (atomic on POSIX)
         std::filesystem::rename(temp_path, data_path_);
-        data_file_.open(data_path_, std::ios::binary | std::ios::in | std::ios::out);
+
+        // fsync directory for durable rename
+        std::filesystem::path dir_path = data_path_.parent_path();
+        if (dir_path.empty()) {
+            dir_path = ".";
+        }
+        int dir_fd = open(dir_path.c_str(), O_RDONLY);
+        if (dir_fd >= 0) {
+            fsync(dir_fd);
+            close(dir_fd);
+        }
+
+        // reopen the data file
+        fd_ = open(data_path_.c_str(), O_RDWR, 0644);
 
         index_.clear();
         load_index();
@@ -367,12 +394,12 @@ class DiskStore::Impl {
 
     bool validate_header() {
         uint32_t magic;
-        if (!util::read_int<uint32_t>(data_file_, magic) || magic != kMagic) {
+        if (!util::read_int_fd<uint32_t>(fd_, magic) || magic != kMagic) {
             return false;
         }
 
         uint32_t version;
-        if (!util::read_int<uint32_t>(data_file_, version) || version != kVersion) {
+        if (!util::read_int_fd<uint32_t>(fd_, version) || version != kVersion) {
             return false;
         }
         return true;
@@ -382,7 +409,7 @@ class DiskStore::Impl {
     std::shared_ptr<util::Clock> clock_;
 
     std::filesystem::path data_path_;
-    std::fstream data_file_;
+    int fd_ = -1;
 
     mutable std::shared_mutex mutex_;
     std::unordered_map<std::string, IndexEntry> index_;
