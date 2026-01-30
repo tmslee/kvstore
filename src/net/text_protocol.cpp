@@ -132,14 +132,14 @@ Request TextProtocol::decode_request(const std::string& line) {
 Response TextProtocol::decode_response(const std::string& line) {
     Response resp;
 
-    if (line.substr(0, 2) == "OK") {
+    if (line.starts_with("OK")) {
         resp.status = Status::Ok;
         if (line.size() > 3) {
             resp.data = line.substr(3);
         }
     } else if (line == "NOT_FOUND") {
         resp.status = Status::NotFound;
-    } else if (line.substr(0, 5) == "ERROR") {
+    } else if (line.starts_with("ERROR")) {
         resp.status = Status::Error;
         if (line.size() > 6) {
             resp.data = line.substr(6);
