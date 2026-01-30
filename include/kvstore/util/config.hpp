@@ -18,6 +18,11 @@ struct Config {
     std::size_t max_connections = 1000;
     int client_timeout_seconds = 300;
 
+    // size limits (prevent memory exhaustion)
+    std::size_t max_message_size = 64 * 1024 * 1024;  // 64MB
+    std::size_t max_key_size = 1024;                  // 1KB
+    std::size_t max_value_size = 64 * 1024 * 1024;    // 64MB
+
     // storage
     std::filesystem::path data_dir = "./data";
     std::size_t snapshot_threshold = 10000;

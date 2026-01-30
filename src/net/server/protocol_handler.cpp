@@ -2,6 +2,8 @@
 
 #include <sys/socket.h>
 
+#include <stdexcept>
+
 #include "kvstore/net/binary_protocol.hpp"
 #include "kvstore/net/text_protocol.hpp"
 
@@ -21,10 +23,17 @@ bool send_all(int fd, const void* data, size_t len) {
     return true;
 }
 
-std::string read_line(int fd, std::string& buffer) {
+// Returns empty string on disconnect
+// Throws std::runtime_error if line exceeds max_size
+std::string read_line(int fd, std::string& buffer, std::size_t max_size) {
     char chunk[1024];
 
     while (true) {
+        // check buffer size limit before searching
+        if (buffer.size() > max_size) {
+            throw std::runtime_error("line too long");
+        }
+
         size_t pos = buffer.find('\n');
         if (pos != std::string::npos) {
             std::string line = buffer.substr(0, pos);
@@ -46,11 +55,23 @@ std::string read_line(int fd, std::string& buffer) {
 }  // namespace
 
 std::optional<Request> TextProtocolHandler::read_request(int fd) {
-    std::string line = read_line(fd, buffer_);
+    std::string line;
+    try {
+        line = read_line(fd, buffer_, limits_.max_line_size);
+    } catch (const std::runtime_error&) {
+        return std::nullopt;  // disconnect client on oversized line
+    }
     if (line.empty() && buffer_.empty()) {
         return std::nullopt;
     }
-    return TextProtocol::decode_request(line);
+    auto req = TextProtocol::decode_request(line);
+
+    // validate key/value sizes
+    if (req.key.size() > limits_.max_key_size || req.value.size() > limits_.max_value_size) {
+        return Request{Command::Unknown, "", "", 0};  // reject as unknown command
+    }
+
+    return req;
 }
 
 bool TextProtocolHandler::write_response(int fd, const Response& response) {
@@ -61,6 +82,22 @@ bool TextProtocolHandler::write_response(int fd, const Response& response) {
 std::optional<Request> BinaryProtocolHandler::read_request(int fd) {
     uint8_t chunk[1024];
 
+    // read until we have at least 4 bytes for the length header
+    while (buffer_.size() < 4) {
+        ssize_t n = recv(fd, chunk, sizeof(chunk), 0);
+        if (n <= 0) {
+            return std::nullopt;
+        }
+        buffer_.insert(buffer_.end(), chunk, chunk + n);
+    }
+
+    // check message size limit early (before buffering the full message)
+    uint32_t msg_len = BinaryProtocol::peek_message_length(buffer_);
+    if (msg_len > limits_.max_message_size) {
+        throw std::runtime_error("message too large");
+    }
+
+    // now read until complete message
     while (!BinaryProtocol::has_complete_message(buffer_)) {
         ssize_t n = recv(fd, chunk, sizeof(chunk), 0);
         if (n <= 0) {
@@ -72,6 +109,13 @@ std::optional<Request> BinaryProtocolHandler::read_request(int fd) {
     size_t consumed = 0;
     auto req = BinaryProtocol::decode_request(buffer_, consumed);
     buffer_.erase(buffer_.begin(), buffer_.begin() + consumed);
+
+    // validate key/value sizes
+    if (req &&
+        (req->key.size() > limits_.max_key_size || req->value.size() > limits_.max_value_size)) {
+        throw std::runtime_error("key or value too large");
+    }
+
     return req;
 }
 
@@ -80,9 +124,10 @@ bool BinaryProtocolHandler::write_response(int fd, const Response& response) {
     return send_all(fd, data.data(), data.size());
 }
 
-std::unique_ptr<IProtocolHandler> create_protocol_handler(int fd, bool force_binary) {
+std::unique_ptr<IProtocolHandler> create_protocol_handler(int fd, bool force_binary,
+                                                          const ProtocolLimits& limits) {
     if (force_binary) {
-        return std::make_unique<BinaryProtocolHandler>();
+        return std::make_unique<BinaryProtocolHandler>(limits);
     }
 
     uint8_t first_byte;
@@ -93,10 +138,10 @@ std::unique_ptr<IProtocolHandler> create_protocol_handler(int fd, bool force_bin
     }
 
     if (first_byte == 0x00 || first_byte > 127) {
-        return std::make_unique<BinaryProtocolHandler>();
+        return std::make_unique<BinaryProtocolHandler>(limits);
     }
 
-    return std::make_unique<TextProtocolHandler>();
+    return std::make_unique<TextProtocolHandler>(limits);
 }
 
 }  // namespace kvstore::net::server

@@ -72,6 +72,10 @@ int main(int argc, char* argv[]) {
         server_opts.port = config.port;
         server_opts.max_connections = config.max_connections;
         server_opts.client_timeout_seconds = config.client_timeout_seconds;
+        server_opts.max_message_size = config.max_message_size;
+        server_opts.max_key_size = config.max_key_size;
+        server_opts.max_value_size = config.max_value_size;
+        server_opts.max_line_size = config.max_message_size;  // use same limit for text protocol
 
         kvstore::net::server::Server server(*store, server_opts);
 

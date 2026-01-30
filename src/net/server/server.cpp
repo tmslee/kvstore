@@ -44,7 +44,11 @@ static SigpipeIgnorer sigpipe_ignorer;
 
 class Server::Impl {
    public:
-    Impl(core::IStore& store, const ServerOptions& options) : store_(store), options_(options) {}
+    Impl(core::IStore& store, const ServerOptions& options)
+        : store_(store),
+          options_(options),
+          limits_{options.max_message_size, options.max_key_size, options.max_value_size,
+                  options.max_line_size} {}
 
     ~Impl() {
         stop();
@@ -298,7 +302,7 @@ class Server::Impl {
 
     void handle_client(int client_fd, ClientInfo* info) {
         try {
-            auto handler = create_protocol_handler(client_fd, options_.binary_only);
+            auto handler = create_protocol_handler(client_fd, options_.binary_only, limits_);
             if (!handler) {
                 close(client_fd);
                 info->finished.store(true);
@@ -402,6 +406,7 @@ class Server::Impl {
 
     core::IStore& store_;
     ServerOptions options_;
+    ProtocolLimits limits_;
 
     uint16_t actual_port_{0};
 
