@@ -39,10 +39,10 @@ class Logger {
 };
 
 // convenience macros
-#define LOG_DEBUG(msg) kvstore::util::Logger::instance().debug(msg);
-#define LOG_INFO(msg) kvstore::util::Logger::instance().info(msg);
-#define LOG_WARN(msg) kvstore::util::Logger::instance().warn(msg);
-#define LOG_ERROR(msg) kvstore::util::Logger::instance().error(msg);
+#define LOG_DEBUG(msg) kvstore::util::Logger::instance().debug(msg)
+#define LOG_INFO(msg) kvstore::util::Logger::instance().info(msg)
+#define LOG_WARN(msg) kvstore::util::Logger::instance().warn(msg)
+#define LOG_ERROR(msg) kvstore::util::Logger::instance().error(msg)
 
 }  // namespace kvstore::util
 

@@ -152,7 +152,7 @@ void WriteAheadLog::replay(
 
 void WriteAheadLog::sync() {
     std::lock_guard lock(mutex_);
-    // flush forces buffered data to be written to disk immediately
+    // flush forces buffered data to OS kernel buffer
     out_.flush();
 }
 
