@@ -65,14 +65,14 @@ void WriteAheadLog::write_header() {
     fsync(fd_);
 }
 
-bool WriteAheadLog::validate_header(std::ifstream& in) {
+bool WriteAheadLog::validate_header(int fd) {
     uint32_t magic;
-    if (!util::read_int<uint32_t>(in, magic) || magic != kMagic) {
+    if (!util::read_int_fd<uint32_t>(fd, magic) || magic != kMagic) {
         return false;
     }
 
     uint32_t version;
-    if (!util::read_int<uint32_t>(in, version) || version != kVersion) {
+    if (!util::read_int_fd<uint32_t>(fd, version) || version != kVersion) {
         return false;
     }
     return true;
@@ -115,25 +115,25 @@ void WriteAheadLog::write_entry_with_ttl(EntryType type, std::string_view key,
     // no fsync here - caller can use sync() for durability
 }
 
-bool WriteAheadLog::read_entry(std::ifstream& in, EntryType& type, std::string& key,
-                               std::string& value, util::ExpirationTime& expires_at) {
+bool WriteAheadLog::read_entry(int fd, EntryType& type, std::string& key, std::string& value,
+                               util::ExpirationTime& expires_at) {
     // we return bool instead of throwing because end of file is expected, not exceptional
     // not being able to read successfully is an expected pattern eventually
     uint8_t type_byte;
-    if (!util::read_int<uint8_t>(in, type_byte)) {
+    if (!util::read_int_fd<uint8_t>(fd, type_byte)) {
         return false;
     }
 
     type = static_cast<EntryType>(type_byte);
-    if (!util::read_string(in, key)) {
+    if (!util::read_string_fd(fd, key)) {
         return false;
     }
-    if (!util::read_string(in, value)) {
+    if (!util::read_string_fd(fd, value)) {
         return false;
     }
     if (type == EntryType::PutWithTTL) {
         int64_t expires_at_ms;
-        if (!util::read_int<int64_t>(in, expires_at_ms)) {
+        if (!util::read_int_fd<int64_t>(fd, expires_at_ms)) {
             return false;
         }
         expires_at = expires_at_ms;
@@ -148,12 +148,13 @@ void WriteAheadLog::replay(
         callback) {
     std::lock_guard lock(mutex_);
 
-    std::ifstream in(path_, std::ios::binary);
-    if (!in.is_open()) {
+    int read_fd = open(path_.c_str(), O_RDONLY);
+    if (read_fd < 0) {
         return;
     }
 
-    if (!validate_header(in)) {
+    if (!validate_header(read_fd)) {
+        close(read_fd);
         throw std::runtime_error("Invalid WAL file: bad header");
     }
 
@@ -162,9 +163,11 @@ void WriteAheadLog::replay(
     std::string value;
     util::ExpirationTime expires_at;
     // try to read entry sequentially until end of file or failure
-    while (read_entry(in, type, key, value, expires_at)) {
+    while (read_entry(read_fd, type, key, value, expires_at)) {
         callback(type, key, value, expires_at);
     }
+
+    close(read_fd);
 }
 
 void WriteAheadLog::sync() {

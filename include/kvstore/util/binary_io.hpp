@@ -82,6 +82,26 @@ inline void write_string_fd(int fd, std::string_view str) {
     }
 }
 
+template <typename T>
+bool read_int_fd(int fd, T& value) {
+    static_assert(std::is_integral_v<T>, "T must be integral");
+    ssize_t bytes_read = read(fd, &value, sizeof(value));
+    return bytes_read == static_cast<ssize_t>(sizeof(value));
+}
+
+inline bool read_string_fd(int fd, std::string& str) {
+    uint32_t len;
+    if (!read_int_fd<uint32_t>(fd, len)) {
+        return false;
+    }
+    str.resize(len);
+    if (len == 0) {
+        return true;
+    }
+    ssize_t bytes_read = read(fd, str.data(), len);
+    return bytes_read == static_cast<ssize_t>(len);
+}
+
 // ============================================================================
 // Buffer-based I/O (for network - binary protocol)
 // ============================================================================

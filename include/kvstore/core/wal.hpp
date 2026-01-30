@@ -3,7 +3,6 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <functional>
 #include <mutex>
 #include <optional>
@@ -57,13 +56,13 @@ class WriteAheadLog {
 
    private:
     void write_header();
-    bool validate_header(std::ifstream& in);
+    bool validate_header(int fd);
     void write_entry(EntryType type, std::string_view key, std::string_view value);
     void write_entry_with_ttl(EntryType type, std::string_view key, std::string_view value,
                               int64_t expires_at_ms);
 
-    [[nodiscard]] bool read_entry(std::ifstream& in, EntryType& type, std::string& key,
-                                  std::string& value, util::ExpirationTime& expires_at);
+    [[nodiscard]] bool read_entry(int fd, EntryType& type, std::string& key, std::string& value,
+                                  util::ExpirationTime& expires_at);
 
     static constexpr uint32_t kMagic = 0x4B56574C;  // "KVWL"
     static constexpr uint32_t kVersion = 1;

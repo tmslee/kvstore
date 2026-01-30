@@ -3,7 +3,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include <fstream>
 #include <stdexcept>
 
 #include "kvstore/util/binary_io.hpp"
@@ -78,18 +77,20 @@ void Snapshot::save(const EntryIterator& iterate) {
 
 void Snapshot::load(
     std::function<void(std::string_view, std::string_view, util::ExpirationTime)> callback) {
-    std::ifstream in(path_, std::ios::binary);
-    if (!in.is_open()) {
+    int fd = open(path_.c_str(), O_RDONLY);
+    if (fd < 0) {
         return;
     }
 
     // verify header
-    if (!validate_header(in)) {
+    if (!validate_header(fd)) {
+        close(fd);
         throw std::runtime_error("Invalid snapshot file: bad header");
     }
 
     uint64_t count;
-    if (!util::read_int<uint64_t>(in, count)) {
+    if (!util::read_int_fd<uint64_t>(fd, count)) {
+        close(fd);
         throw std::runtime_error("corrupt snapshot file");
     }
 
@@ -98,18 +99,21 @@ void Snapshot::load(
 
     // get each entry and pass to callback. store will insert to map
     for (uint64_t i = 0; i < count; ++i) {
-        if (!util::read_string(in, key) || !util::read_string(in, value)) {
+        if (!util::read_string_fd(fd, key) || !util::read_string_fd(fd, value)) {
+            close(fd);
             throw std::runtime_error("corrupted snapshot file");
         }
         uint8_t has_expiration;
-        if (!util::read_int<uint8_t>(in, has_expiration)) {
+        if (!util::read_int_fd<uint8_t>(fd, has_expiration)) {
+            close(fd);
             throw std::runtime_error("corrupted snapshot file");
         }
 
         util::ExpirationTime expires_at = std::nullopt;
         if (has_expiration != 0) {
             int64_t expires_at_ms;
-            if (!util::read_int<int64_t>(in, expires_at_ms)) {
+            if (!util::read_int_fd<int64_t>(fd, expires_at_ms)) {
+                close(fd);
                 throw std::runtime_error("corrupted snapshot file");
             }
             expires_at = expires_at_ms;
@@ -117,6 +121,7 @@ void Snapshot::load(
         callback(key, value, expires_at);
     }
 
+    close(fd);
     entry_count_ = count;
 }
 
@@ -132,14 +137,14 @@ std::size_t Snapshot::entry_count() const {
     return entry_count_;
 }
 
-bool Snapshot::validate_header(std::ifstream& in) {
+bool Snapshot::validate_header(int fd) {
     uint32_t magic;
-    if (!util::read_int<uint32_t>(in, magic) || magic != kMagic) {
+    if (!util::read_int_fd<uint32_t>(fd, magic) || magic != kMagic) {
         return false;
     }
 
     uint32_t version;
-    if (!util::read_int<uint32_t>(in, version) || version != kVersion) {
+    if (!util::read_int_fd<uint32_t>(fd, version) || version != kVersion) {
         return false;
     }
     return true;
