@@ -3,7 +3,6 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <functional>
 #include <mutex>
 #include <optional>
@@ -21,7 +20,7 @@ class WriteAheadLog {
     explicit WriteAheadLog(const std::filesystem::path& path);
     ~WriteAheadLog();
 
-    // delete copies bc class holds open std::ofstream to WAL file.
+    // delete copies bc class holds open file descriptor to WAL file.
     // copying would have 2 instances think they own the same file
     // - both would try to write/close -> corrupted data, double close, UB
     WriteAheadLog(const WriteAheadLog&) = delete;
@@ -57,19 +56,19 @@ class WriteAheadLog {
 
    private:
     void write_header();
-    bool validate_header(std::ifstream& in);
+    bool validate_header(int fd);
     void write_entry(EntryType type, std::string_view key, std::string_view value);
     void write_entry_with_ttl(EntryType type, std::string_view key, std::string_view value,
                               int64_t expires_at_ms);
 
-    [[nodiscard]] bool read_entry(std::ifstream& in, EntryType& type, std::string& key,
-                                  std::string& value, util::ExpirationTime& expires_at);
+    [[nodiscard]] bool read_entry(int fd, EntryType& type, std::string& key, std::string& value,
+                                  util::ExpirationTime& expires_at);
 
     static constexpr uint32_t kMagic = 0x4B56574C;  // "KVWL"
     static constexpr uint32_t kVersion = 1;
 
     std::filesystem::path path_;
-    std::ofstream out_;
+    int fd_ = -1;
     mutable std::mutex mutex_;
 };
 

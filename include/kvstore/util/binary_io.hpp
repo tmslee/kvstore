@@ -1,60 +1,71 @@
 #ifndef KVSTORE_UTIL_BINARY_IO_HPP
 #define KVSTORE_UTIL_BINARY_IO_HPP
 
+#include <unistd.h>
+
 #include <cstdint>
-#include <istream>
-#include <optional>
-#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace kvstore::util {
-/*
-    note: we have both uint64(8bytes) and uint32(4bytes) for different purposes
-    - uint64 for entry count -> need more range
-    - uint32 for string lengths
 
-    when we read/write strings we always do length then data
-    stream read() and write() take char*. we reinterpret_cast<const char*> to treat this integer's
-   memory as raw bytes
+/*
+    Binary I/O utilities for the kvstore project.
+
+    Two I/O patterns are supported:
+    1. POSIX fd-based I/O - for file persistence (WAL, snapshot, disk_store)
+       Uses raw file descriptors with fsync() for durability guarantees.
+
+    2. Buffer-based I/O - for network protocol (binary_protocol)
+       Uses std::vector<uint8_t> for building/parsing network messages.
+
+    Note: we use uint32 for string lengths and uint64 for entry counts.
+    When we read/write strings we always do length-prefix then data.
 */
 
 // ============================================================================
-// Stream-based I/O (for files - WAL, snapshot)
+// POSIX fd-based I/O (for file persistence with fsync support)
 // ============================================================================
 
 template <typename T>
-void write_int(std::ostream& out, T value) {
+void write_int_fd(int fd, T value) {
     static_assert(std::is_integral_v<T>, "T must be integral");
-    out.write(reinterpret_cast<const char*>(&value), sizeof(value));
-    if (!out.good()) {
-        throw std::runtime_error("Stream write failed");
+    ssize_t written = write(fd, &value, sizeof(value));
+    if (written != static_cast<ssize_t>(sizeof(value))) {
+        throw std::runtime_error("fd write failed");
+    }
+}
+
+inline void write_string_fd(int fd, std::string_view str) {
+    write_int_fd<uint32_t>(fd, static_cast<uint32_t>(str.size()));
+    if (!str.empty()) {
+        ssize_t written = write(fd, str.data(), str.size());
+        if (written != static_cast<ssize_t>(str.size())) {
+            throw std::runtime_error("fd write failed");
+        }
     }
 }
 
 template <typename T>
-bool read_int(std::istream& in, T& value) {
+bool read_int_fd(int fd, T& value) {
     static_assert(std::is_integral_v<T>, "T must be integral");
-    in.read(reinterpret_cast<char*>(&value), sizeof(value));
-    return in.good();
+    ssize_t bytes_read = read(fd, &value, sizeof(value));
+    return bytes_read == static_cast<ssize_t>(sizeof(value));
 }
 
-inline void write_string(std::ostream& out, std::string_view str) {
-    write_int<uint32_t>(out, static_cast<uint32_t>(str.size()));
-    out.write(str.data(), static_cast<std::streamsize>(str.size()));
-    if (!out.good()) {
-        throw std::runtime_error("Stream write failed");
-    }
-}
-
-inline bool read_string(std::istream& in, std::string& str) {
+inline bool read_string_fd(int fd, std::string& str) {
     uint32_t len;
-    read_int<uint32_t>(in, len);
+    if (!read_int_fd<uint32_t>(fd, len)) {
+        return false;
+    }
     str.resize(len);
-    in.read(str.data(), len);
-    return in.good();
+    if (len == 0) {
+        return true;
+    }
+    ssize_t bytes_read = read(fd, str.data(), len);
+    return bytes_read == static_cast<ssize_t>(len);
 }
 
 // ============================================================================

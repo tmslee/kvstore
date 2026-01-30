@@ -50,7 +50,7 @@ class Snapshot {
     [[nodiscard]] std::size_t entry_count() const;
 
    private:
-    bool validate_header(std::ifstream& in);
+    bool validate_header(int fd);
     static constexpr uint32_t kMagic = 0x4B565353;  //"KVSS"
     static constexpr uint32_t kVersion = 2;
 
