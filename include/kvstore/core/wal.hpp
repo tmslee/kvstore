@@ -21,7 +21,7 @@ class WriteAheadLog {
     explicit WriteAheadLog(const std::filesystem::path& path);
     ~WriteAheadLog();
 
-    // delete copies bc class holds open std::ofstream to WAL file.
+    // delete copies bc class holds open file descriptor to WAL file.
     // copying would have 2 instances think they own the same file
     // - both would try to write/close -> corrupted data, double close, UB
     WriteAheadLog(const WriteAheadLog&) = delete;
@@ -69,7 +69,7 @@ class WriteAheadLog {
     static constexpr uint32_t kVersion = 1;
 
     std::filesystem::path path_;
-    std::ofstream out_;
+    int fd_ = -1;
     mutable std::mutex mutex_;
 };
 

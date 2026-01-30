@@ -1,6 +1,8 @@
 #ifndef KVSTORE_UTIL_BINARY_IO_HPP
 #define KVSTORE_UTIL_BINARY_IO_HPP
 
+#include <unistd.h>
+
 #include <cstdint>
 #include <istream>
 #include <optional>
@@ -55,6 +57,29 @@ inline bool read_string(std::istream& in, std::string& str) {
     str.resize(len);
     in.read(str.data(), len);
     return in.good();
+}
+
+// ============================================================================
+// POSIX fd-based I/O (for durable writes with fsync)
+// ============================================================================
+
+template <typename T>
+void write_int_fd(int fd, T value) {
+    static_assert(std::is_integral_v<T>, "T must be integral");
+    ssize_t written = write(fd, &value, sizeof(value));
+    if (written != static_cast<ssize_t>(sizeof(value))) {
+        throw std::runtime_error("fd write failed");
+    }
+}
+
+inline void write_string_fd(int fd, std::string_view str) {
+    write_int_fd<uint32_t>(fd, static_cast<uint32_t>(str.size()));
+    if (!str.empty()) {
+        ssize_t written = write(fd, str.data(), str.size());
+        if (written != static_cast<ssize_t>(str.size())) {
+            throw std::runtime_error("fd write failed");
+        }
+    }
 }
 
 // ============================================================================
