@@ -73,9 +73,9 @@ class Store : public IStore {
 
     void clear() override;
     void flush() override;
+    void cleanup_expired() override;
 
     void snapshot();
-    void cleanup_expired();
 
    private:
     class Impl;
