@@ -1,5 +1,8 @@
 #include "kvstore/core/snapshot.hpp"
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <fstream>
 #include <stdexcept>
 
@@ -15,51 +18,62 @@ void Snapshot::save(const EntryIterator& iterate) {
     // write to temp file first to make snapshotting atomic. crash mid write will keep original
     // snapshot safe
     std::filesystem::path temp_path = path_.string() + ".tmp";
-    {
-        std::ofstream out(temp_path, std::ios::binary);
-        if (!out.is_open()) {
-            throw std::runtime_error("failed to open snapshot file: " + temp_path.string());
-        }
-        // write header. magic number for file type, version for format compatibility
-        util::write_int<uint32_t>(out, kMagic);
-        util::write_int<uint32_t>(out, kVersion);
 
-        // tellp (tell put) - return current write position
-        // tellg (tell get) - return current read position
-        auto count_pos = out.tellp();
-        // write placeholder for count (we dont know yet)
-        util::write_int<uint64_t>(out, 0);
-
-        std::size_t count = 0;
-        // call iterator & pass the lambda which is the entry emitter
-        iterate([&out, &count](std::string_view key, std::string_view value,
-                               util::ExpirationTime expires_at) {
-            util::write_string(out, key);
-            util::write_string(out, value);
-            uint8_t has_expiration = expires_at.has_value() ? 1 : 0;
-            util::write_int<uint8_t>(out, has_expiration);
-            if (expires_at.has_value()) {
-                util::write_int<uint64_t>(out, expires_at.value());
-            }
-            ++count;
-        });
-
-        // seekp (seek put) - go to specified write position
-        // seekg (seek get) - go to specified read position
-        // update our entry counts
-        out.seekp(count_pos);
-        util::write_int<uint64_t>(out, count);
-
-        // flush to disk & verify success
-        out.flush();
-        if (!out.good()) {
-            throw std::runtime_error("failed to write snapshot");
-        }
-
-        entry_count_ = count;
+    int fd = open(temp_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        throw std::runtime_error("failed to open snapshot file: " + temp_path.string());
     }
-    // rename temp to original
+
+    // write header. magic number for file type, version for format compatibility
+    util::write_int_fd<uint32_t>(fd, kMagic);
+    util::write_int_fd<uint32_t>(fd, kVersion);
+
+    // remember position for count (we'll update it later)
+    off_t count_pos = lseek(fd, 0, SEEK_CUR);
+
+    // write placeholder for count (we dont know yet)
+    util::write_int_fd<uint64_t>(fd, 0);
+
+    std::size_t count = 0;
+    // call iterator & pass the lambda which is the entry emitter
+    iterate([fd, &count](std::string_view key, std::string_view value,
+                         util::ExpirationTime expires_at) {
+        util::write_string_fd(fd, key);
+        util::write_string_fd(fd, value);
+        uint8_t has_expiration = expires_at.has_value() ? 1 : 0;
+        util::write_int_fd<uint8_t>(fd, has_expiration);
+        if (expires_at.has_value()) {
+            util::write_int_fd<uint64_t>(fd, expires_at.value());
+        }
+        ++count;
+    });
+
+    // seek back and update our entry count
+    lseek(fd, count_pos, SEEK_SET);
+    util::write_int_fd<uint64_t>(fd, count);
+
+    // fsync to ensure data is on physical disk before rename
+    if (fsync(fd) != 0) {
+        close(fd);
+        throw std::runtime_error("failed to fsync snapshot file");
+    }
+    close(fd);
+
+    entry_count_ = count;
+
+    // rename temp to final (atomic on POSIX)
     std::filesystem::rename(temp_path, path_);
+
+    // fsync the directory to ensure rename is durable
+    std::filesystem::path dir_path = path_.parent_path();
+    if (dir_path.empty()) {
+        dir_path = ".";
+    }
+    int dir_fd = open(dir_path.c_str(), O_RDONLY);
+    if (dir_fd >= 0) {
+        fsync(dir_fd);
+        close(dir_fd);
+    }
 }
 
 void Snapshot::load(
