@@ -31,7 +31,7 @@ public:
     //callback signature: (fd, events) where event is EPOLLIN/EPOLLOUT/EPOLLERR/etc
     using Callback = std::function<void(int fd, uint32_t events)>;
 
-    EvenLoop();
+    EventLoop();
     ~EventLoop();
 
     // non-copyable, non-moveable (owns epoll fd and callbacks)
