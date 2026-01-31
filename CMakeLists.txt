@@ -52,6 +52,7 @@ target_sources(kvstore
         src/net/server/server.cpp
         src/net/server/protocol_handler.cpp
         src/net/server/event_loop.cpp
+        src/net/server/connection.cpp
 
         src/net/client/client.cpp
         src/net/client/protocol_handler.cpp

@@ -48,7 +48,7 @@ public:
     [[nodiscard]] bool has_pending_write() const;
 
     //get file descriptor
-    [[nodiscard]] int fd() const except { return fd_; }
+    [[nodiscard]] int fd() const noexcept { return fd_; }
 
     //set socket to non-blocking mode
     static bool set_nonblocking(int fd);

@@ -22,7 +22,7 @@ Connection::~Connection() {
     }
 }
 
-bool Connection::set_noblocking(int fd) {
+bool Connection::set_nonblocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if(flags < 0) {
         return false;
@@ -97,12 +97,12 @@ std::optional<Request> Connection::try_parse_request() {
 
         size_t consumed = 0;
         auto req = BinaryProtocol::decode_request(read_buffer_, consumed);
-        read_buffer_.erase(read_buffer_begin(), read_buffer_.begin() + consumed);
+        read_buffer_.erase(read_buffer_.begin(), read_buffer_.begin() + consumed);
         return req;
     
     } else {
         // text protocol: look for newline
-        auto it = std::find(read_buffer_.begin(), read_buffer_end(), '\n');
+        auto it = std::find(read_buffer_.begin(), read_buffer_.end(), '\n');
         if(it == read_buffer_.end()){
             return std::nullopt;
         }

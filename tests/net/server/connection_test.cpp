@@ -7,7 +7,7 @@
 
 using namespace kvstore::net::server;
 
-class ConnectionTest : public ::testing::TEST {
+class ConnectionTest : public ::testing::Test {
 protected:
     void SetUp() override {
         ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds_), 0);
@@ -16,7 +16,7 @@ protected:
     }  
 
     void TearDown() override {
-        if(fds_[1] >= 0) clsoe (fds_[1]);
+        if(fds_[1] >= 0) close (fds_[1]);
     }
 
     int fds_[2] = {-1,-1};
