@@ -68,13 +68,13 @@ class EventLoopIntegrationTest : public ::testing::Test {
 };
 
 TEST_F(EventLoopIntegrationTest, AcceptConnection) {
-    // verify that eventlopp can detect incoming connections with epoll
+    // verify that eventloop can detect incoming connections
     EventLoop loop;
     bool accepted = false;
 
-    // add server to epoll & watch for EPOLLIN (readable)
+    // add server to event loop & watch for readable events
     // callback is: accept connection, close client_fd, stop the loop.
-    loop.add(server_fd_, EPOLLIN, [&](int fd, uint32_t) {
+    loop.add(server_fd_, kEventRead, [&](int fd, uint32_t) {
         sockaddr_in client_addr{};
         socklen_t len = sizeof(client_addr);
         int client_fd = accept(fd, (sockaddr*)&client_addr, &len);
@@ -107,18 +107,18 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
         flow:
         - when server_fd_ is readable, accept new client, make it non blocking.
         - create a connection obj to track its state
-        - add client_fd to epoll (watch for EPOLLIN)
+        - add client_fd to epoll (watch for kEventRead)
         - when client_fd is readable:
             - read into buffer
             - if closed/error -> remove from epoll & cleanup
             - if request is complate:
                 - create response & put in write buffer
-                - modify epoll to also watch for EPOLLOUT
-        - when client_fd is wriateable (EPOLLOUT)
+                - modify epoll to also watch for kEventWrite
+        - when client_fd is wriateable (kEventWrite)
             - flush write buffer to socket
-            - if nothing left to write, stop watching EPOLLOUT
+            - if nothing left to write, stop watching kEventWrite
     */
-    loop.add(server_fd_, EPOLLIN, [&](int fd, uint32_t) {
+    loop.add(server_fd_, kEventRead, [&](int fd, uint32_t) {
         sockaddr_in client_addr{};
         socklen_t len = sizeof(client_addr);
         int client_fd = accept(fd, (sockaddr*)&client_addr, &len);
@@ -128,13 +128,13 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
         Connection::set_nonblocking(client_fd);
         connections[client_fd] = std::make_unique<Connection>(client_fd);
 
-        loop.add(client_fd, EPOLLIN, [&, client_fd](int, uint32_t ev) {
+        loop.add(client_fd, kEventRead, [&, client_fd](int, uint32_t ev) {
             auto it = connections.find(client_fd);
             if (it == connections.end())
                 return;  // already removed
             auto& conn = it->second;
 
-            if (ev & EPOLLIN) {
+            if (ev & kEventRead) {
                 auto result = conn->do_read();
                 if (result == IoResult::Closed || result == IoResult::Error) {
                     loop.remove(client_fd);
@@ -147,14 +147,14 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
                     // echo back
                     Response resp = Response::ok(req->key);
                     conn->queue_response(resp);
-                    loop.modify(client_fd, EPOLLIN | EPOLLOUT);
+                    loop.modify(client_fd, kEventRead | kEventWrite);
                 }
             }
 
-            if (ev & EPOLLOUT) {
+            if (ev & kEventWrite) {
                 conn->do_write();
                 if (!conn->has_pending_write()) {
-                    loop.modify(client_fd, EPOLLIN);
+                    loop.modify(client_fd, kEventRead);
                 }
             }
         });
@@ -191,7 +191,7 @@ TEST_F(EventLoopIntegrationTest, MultipleClients) {
     std::unordered_map<int, std::unique_ptr<Connection>> connections;
     int clients_served = 0;
 
-    loop.add(server_fd_, EPOLLIN, [&](int fd, uint32_t) {
+    loop.add(server_fd_, kEventRead, [&](int fd, uint32_t) {
         sockaddr_in client_addr{};
         socklen_t len = sizeof(client_addr);
         int client_fd = accept(fd, (sockaddr*)&client_addr, &len);
@@ -201,13 +201,13 @@ TEST_F(EventLoopIntegrationTest, MultipleClients) {
         Connection::set_nonblocking(client_fd);
         connections[client_fd] = std::make_unique<Connection>(client_fd);
 
-        loop.add(client_fd, EPOLLIN, [&, client_fd](int, uint32_t ev) {
+        loop.add(client_fd, kEventRead, [&, client_fd](int, uint32_t ev) {
             auto it = connections.find(client_fd);
             if (it == connections.end())
                 return;  // already removed
             auto& conn = it->second;
 
-            if (ev & EPOLLIN) {
+            if (ev & kEventRead) {
                 auto result = conn->do_read();
                 if (result == IoResult::Closed || result == IoResult::Error) {
                     loop.remove(client_fd);
@@ -221,14 +221,14 @@ TEST_F(EventLoopIntegrationTest, MultipleClients) {
 
                 if (auto req = conn->try_parse_request()) {
                     conn->queue_response(Response::ok("pong"));
-                    loop.modify(client_fd, EPOLLIN | EPOLLOUT);
+                    loop.modify(client_fd, kEventRead | kEventWrite);
                 }
             }
 
-            if (ev & EPOLLOUT) {
+            if (ev & kEventWrite) {
                 conn->do_write();
                 if (!conn->has_pending_write()) {
-                    loop.modify(client_fd, EPOLLIN);
+                    loop.modify(client_fd, kEventRead);
                 }
             }
         });

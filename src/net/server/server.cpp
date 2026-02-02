@@ -201,7 +201,7 @@ class Server::Impl {
    private:
     void event_loop_run() {
         // add server socket to watch for incoming connecitons
-        loop_.add(server_fd_.load(), EPOLLIN, [this](int, uint32_t) { handle_accept(); });
+        loop_.add(server_fd_.load(), kEventRead, [this](int, uint32_t) { handle_accept(); });
         loop_.run();
     }
 
@@ -238,17 +238,17 @@ class Server::Impl {
         LOG_DEBUG("Client connected, fd=" + std::to_string(client_fd));
 
         // add to event loop, watch for reads
-        loop_.add(client_fd, EPOLLIN,
+        loop_.add(client_fd, kEventRead,
                   [this, client_fd](int, uint32_t events) { handle_client(client_fd, events); });
     }
 
     /*
-        note: in handle client we add EPOLLOUT only after processing a request.
+        note: in handle client we add kEventWrite only after processing a request.
         if socket was already writable we wont know until next epoll_wait() call
         latency is at most 1 poll iteration (100ms timeout) this is okay for most cases
 
         for high throughput scenarios you could: try writing imeediately after queueing response
-        and only watch EPOLLOUT if theres still data left
+        and only watch kEventWrite if theres still data left
         or use edge-triggered mode (EPOLLET) which requires more careful handling
     */
 
@@ -260,8 +260,8 @@ class Server::Impl {
         auto& conn = it->second;
 
         // errors/hangups
-        if (events & (EPOLLERR | EPOLLHUP)) {
-            if (events & EPOLLERR) {
+        if (events & (kEventError | kEventHangup)) {
+            if (events & kEventError) {
                 LOG_DEBUG("Client error, fd=" + std::to_string(client_fd));
             } else {
                 LOG_DEBUG("Client hangup, fd=" + std::to_string(client_fd));
@@ -271,7 +271,7 @@ class Server::Impl {
         }
 
         // handle readable (incoming data)
-        if (events & EPOLLIN) {
+        if (events & kEventRead) {
             auto result = conn->do_read();
             if (result == IoResult::Closed || result == IoResult::Error) {
                 close_client(client_fd);
@@ -299,21 +299,21 @@ class Server::Impl {
 
             // if we have data to send, watch for writability
             if (conn->has_pending_write()) {
-                loop_.modify(client_fd, EPOLLIN | EPOLLOUT);
+                loop_.modify(client_fd, kEventRead | kEventWrite);
             }
         }
 
         // handle writable (can send data)
-        if (events & EPOLLOUT) {
+        if (events & kEventWrite) {
             auto result = conn->do_write();
             if (result == IoResult::Error) {
                 close_client(client_fd);
                 return;
             }
 
-            // if nothing left to write, stop watching EPOLLOUT
+            // if nothing left to write, stop watching kEventWrite
             if (!conn->has_pending_write()) {
-                loop_.modify(client_fd, EPOLLIN);
+                loop_.modify(client_fd, kEventRead);
             }
         }
     }

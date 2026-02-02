@@ -34,7 +34,7 @@ TEST_F(EventLoopTest, AddAndRemove) {
     EventLoop loop;
     bool called = false;
 
-    loop.add(fds_[0], EPOLLIN, [&](int, uint32_t) { called = true; });
+    loop.add(fds_[0], kEventRead, [&](int, uint32_t) { called = true; });
 
     loop.remove(fds_[0]);
     // should not throw
@@ -42,7 +42,7 @@ TEST_F(EventLoopTest, AddAndRemove) {
 
 TEST_F(EventLoopTest, PollWithNoEvents) {
     EventLoop loop;
-    loop.add(fds_[0], EPOLLIN, [](int, uint32_t) {});
+    loop.add(fds_[0], kEventRead, [](int, uint32_t) {});
 
     // poll with 0 timeout - should return immedaitely with no events
     int n = loop.poll(0);
@@ -54,10 +54,10 @@ TEST_F(EventLoopTest, PollDetectsReadable) {
     bool called = false;
     int received_fd = -1;
 
-    loop.add(fds_[0], EPOLLIN, [&](int fd, uint32_t events) {
+    loop.add(fds_[0], kEventRead, [&](int fd, uint32_t events) {
         called = true;
         received_fd = fd;
-        EXPECT_TRUE(events & EPOLLIN);
+        EXPECT_TRUE(events & kEventRead);
     });
 
     // write to fds_[1] makes fds_[0] readable
@@ -74,9 +74,9 @@ TEST_F(EventLoopTest, PollDetectsWritable) {
     EventLoop loop;
     bool called = false;
 
-    loop.add(fds_[0], EPOLLOUT, [&](int, uint32_t events) {
+    loop.add(fds_[0], kEventWrite, [&](int, uint32_t events) {
         called = true;
-        EXPECT_TRUE(events & EPOLLOUT);
+        EXPECT_TRUE(events & kEventWrite);
     });
 
     // sokcet should be immediately writable
@@ -89,15 +89,15 @@ TEST_F(EventLoopTest, ModifyEvents) {
     EventLoop loop;
     int call_count = 0;
 
-    // start with EPOLLIN only
-    loop.add(fds_[0], EPOLLIN, [&](int, uint32_t) { call_count++; });
+    // start with kEventRead only
+    loop.add(fds_[0], kEventRead, [&](int, uint32_t) { call_count++; });
 
     // no data to read. should not trigger
     loop.poll(0);
     EXPECT_EQ(call_count, 0);
 
-    // modify to watch for EPOLLOUT
-    loop.modify(fds_[0], EPOLLOUT);
+    // modify to watch for kEventWrite
+    loop.modify(fds_[0], kEventWrite);
 
     // should now trigger (socket writable)
     loop.poll(100);
@@ -112,8 +112,8 @@ TEST_F(EventLoopTest, MultipleFileDescriptors) {
     EventLoop loop;
     int count1 = 0, count2 = 0;
 
-    loop.add(fds_[0], EPOLLIN, [&](int, uint32_t) { count1++; });
-    loop.add(fds2[0], EPOLLIN, [&](int, uint32_t) { count2++; });
+    loop.add(fds_[0], kEventRead, [&](int, uint32_t) { count1++; });
+    loop.add(fds2[0], kEventRead, [&](int, uint32_t) { count2++; });
 
     // write to both
     write(fds_[1], "a", 1);
@@ -132,7 +132,7 @@ TEST_F(EventLoopTest, MultipleFileDescriptors) {
 TEST_F(EventLoopTest, RunAndStop) {
     EventLoop loop;
 
-    loop.add(fds_[0], EPOLLIN, [&](int, uint32_t) { loop.stop(); });
+    loop.add(fds_[0], kEventRead, [&](int, uint32_t) { loop.stop(); });
 
     // start loop in another thread
     std::thread t([&]() { loop.run(); });
@@ -152,7 +152,7 @@ TEST_F(EventLoopTest, RunAndStop) {
 TEST_F(EventLoopTest, StopFromAnotherThread) {
     EventLoop loop;
 
-    loop.add(fds_[0], EPOLLIN, [](int, uint32_t) {});
+    loop.add(fds_[0], kEventRead, [](int, uint32_t) {});
 
     std::thread t([&]() { loop.run(); });
 
@@ -169,7 +169,7 @@ TEST_F(EventLoopTest, StopFromAnotherThread) {
 TEST_F(EventLoopTest, CallbackException) {
     EventLoop loop;
 
-    loop.add(fds_[0], EPOLLIN, [](int, uint32_t) { throw std::runtime_error("test exception"); });
+    loop.add(fds_[0], kEventRead, [](int, uint32_t) { throw std::runtime_error("test exception"); });
 
     write(fds_[1], "x", 1);
 
