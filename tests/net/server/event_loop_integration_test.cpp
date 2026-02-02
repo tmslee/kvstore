@@ -8,6 +8,7 @@
 #include <memory>
 #include <thread>
 #include <unordered_map>
+#include <cstring>
 
 #include "kvstore/core/store.hpp"
 #include "kvstore/net/server/connection.hpp"
@@ -64,7 +65,7 @@ class EventLoopIntegrationTest : public ::testing::Test {
 
     int server_fd_ = -1;
     uint16_t port_ = 0;
-}
+};
 
 TEST_F(EventLoopIntegrationTest, AcceptConnection) {
     // verify that eventlopp can detect incoming connections with epoll
@@ -73,9 +74,9 @@ TEST_F(EventLoopIntegrationTest, AcceptConnection) {
 
     // add server to epoll & watch for EPOLLIN (readable)
     // callback is: accept connection, close client_fd, stop the loop.
-    loop.add(server_fd_, EPOLLIN, [&](int fd, uint32_t events) {
+    loop.add(server_fd_, EPOLLIN, [&](int fd, uint32_t) {
         sockaddr_in client_addr{};
-        sockeltn_t len = sizeof(client_addr);
+        socklen_t len = sizeof(client_addr);
         int client_fd = accept(fd, (sockaddr*)&client_addr, &len);
         EXPECT_GE(client_fd, 0);
         close(client_fd);
@@ -117,7 +118,7 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
             - flush write buffer to socket
             - if nothing left to write, stop watching EPOLLOUT
     */
-    loop.add(server_fd_, EPOLLIN, [&](int fd, uint32_t events) {
+    loop.add(server_fd_, EPOLLIN, [&](int fd, uint32_t) {
         sockaddr_in client_addr{};
         socklen_t len = sizeof(client_addr);
         int client_fd = accept(fd, (sockaddr*)&client_addr, &len);
@@ -127,8 +128,10 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
         Connection::set_nonblocking(client_fd);
         connections[client_fd] = std::make_unique<Connection>(client_fd);
 
-        loop.add(client_fd, EPOLLIN, [&, client_fd](int fd, uint32_t ev) {
-            auto& conn = connections[client_fd];
+        loop.add(client_fd, EPOLLIN, [&, client_fd](int, uint32_t ev) {
+            auto it = connections.find(client_fd);
+            if (it == connections.end()) return;  // already removed
+            auto& conn = it->second;
 
             if (ev & EPOLLIN) {
                 auto result = conn->do_read();
@@ -149,7 +152,7 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
 
             if (ev & EPOLLOUT) {
                 conn->do_write();
-                if (!conn->has - pending_write()) {
+                if (!conn->has_pending_write()) {
                     loop.modify(client_fd, EPOLLIN);
                 }
             }
@@ -166,7 +169,11 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
 
         char buf[256];
         ssize_t n = read(fd, buf, sizeof(buf) - 1);
-        buf[n] = '\0';
+        if (n > 0) {
+            buf[n] = '\0';
+        } else {
+            buf[0] = '\0';
+        }
 
         EXPECT_TRUE(strstr(buf, "hello") != nullptr);
 
@@ -181,9 +188,9 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
 TEST_F(EventLoopIntegrationTest, MultipleClients) {
     EventLoop loop;
     std::unordered_map<int, std::unique_ptr<Connection>> connections;
-    int client_served = 0;
+    int clients_served = 0;
 
-    loop.add(server_fd_, EPOLLIN, [&](int fd, uint32_t events) {
+    loop.add(server_fd_, EPOLLIN, [&](int fd, uint32_t) {
         sockaddr_in client_addr{};
         socklen_t len = sizeof(client_addr);
         int client_fd = accept(fd, (sockaddr*)&client_addr, &len);
@@ -193,15 +200,17 @@ TEST_F(EventLoopIntegrationTest, MultipleClients) {
         Connection::set_nonblocking(client_fd);
         connections[client_fd] = std::make_unique<Connection>(client_fd);
 
-        loop.add(client_fd, EPOLLIN, [&, client_fd](int fd, uint32_t ev) {
-            auto& conn = connections[client_fd];
+        loop.add(client_fd, EPOLLIN, [&, client_fd](int, uint32_t ev) {
+            auto it = connections.find(client_fd);
+            if (it == connections.end()) return;  // already removed
+            auto& conn = it->second;
 
             if (ev & EPOLLIN) {
                 auto result = conn->do_read();
                 if (result == IoResult::Closed || result == IoResult::Error) {
                     loop.remove(client_fd);
                     connections.erase(client_fd);
-                    client_served++;
+                    clients_served++;
                     if (clients_served >= 3) {
                         loop.stop();
                     }
@@ -226,7 +235,7 @@ TEST_F(EventLoopIntegrationTest, MultipleClients) {
     // launch 3 clients
     std::vector<std::thread> clients;
     for (int i = 0; i < 3; ++i) {
-        clients.emplace_back([&, i]() {
+        clients.emplace_back([this, i]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(50 + i * 10));
             int fd = connect_client();
             write(fd, "PING\r\n", 6);

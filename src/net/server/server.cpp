@@ -8,8 +8,6 @@
 
 #include <atomic>
 #include <cstring>
-#include <iostream>
-#include <mutex>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -32,7 +30,7 @@ namespace {
    -> default behavior: terminate the process 2 ways to handle:
     1. signal(SIGPIPE, SIG_IGN) -> ignore globally, send() returns -1 with errno = EPIPE
     2. MSG_NOSIGNAL flag on each send() call - same effect, per call
-    - we do both for afety
+    - we do both for safety
 */
 struct SigpipeIgnorer {
     SigpipeIgnorer() {
@@ -201,11 +199,6 @@ class Server::Impl {
     }
 
    private:
-    struct ClientInfo {
-        std::thread thread;
-        std::atomic<bool> finished{false};
-    };
-
     void event_loop_run() {
         // add server socket to watch for incoming connecitons
         loop_.add(server_fd_.load(), EPOLLIN, [this](int, uint32_t) { handle_accept(); });
@@ -323,7 +316,6 @@ class Server::Impl {
         LOG_DEBUG("Client disconnected, fd=" + std::to_string(client_fd));
         loop_.remove(client_fd);
         connections_.erase(client_fd);
-        close(client_fd);
     }
 
     Response process_request(const Request& req) {

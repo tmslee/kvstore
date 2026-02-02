@@ -50,7 +50,19 @@ void EventLoop::remove(int fd) {
     epoll_event ev{};
     epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, &ev);  // ignore errors (fd might already be closed)
 
-    callbacks_.erase(fd);
+    // !!!!!IMPORTANT!!!!: If we're inside a callback, defer the removal to avoid destroying the callback while executing
+    if (in_callback_) {
+        pending_removals_.push_back(fd);
+    } else {
+        callbacks_.erase(fd);
+    }
+}
+
+void EventLoop::process_pending_removals() {
+    for (int fd : pending_removals_) {
+        callbacks_.erase(fd);
+    }
+    pending_removals_.clear();
 }
 
 int EventLoop::poll(int timeout_ms) {
@@ -71,8 +83,13 @@ int EventLoop::poll(int timeout_ms) {
         auto it = callbacks_.find(fd);
         if (it != callbacks_.end()) {
             try {
+                in_callback_ = true;
                 it->second(fd, ev);
+                in_callback_ = false;
+                process_pending_removals();
             } catch (const std::exception& e) {
+                in_callback_ = false;
+                process_pending_removals();
                 LOG_ERROR("EventLoop callback error: " + std::string(e.what()));
             }
         }
