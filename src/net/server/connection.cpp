@@ -71,14 +71,21 @@ IoResult Connection::do_read() {
 }
 
 IoResult Connection::do_write() {
-    if (write_buffer_.empty()) {
+    size_t pending = write_buffer_.size() - write_offset_;
+    if (pending == 0) {
         return IoResult::Ok;
     }
 
-    ssize_t n = send(fd_, write_buffer_.data(), write_buffer_.size(), MSG_NOSIGNAL);
+    // send from offset position (skip already-sent data)
+    ssize_t n = send(fd_, write_buffer_.data() + write_offset_, pending, MSG_NOSIGNAL);
 
     if (n > 0) {
-        write_buffer_.erase(write_buffer_.begin(), write_buffer_.begin() + n);
+        write_offset_ += n;
+        // compact buffer when consumed portion exceeds threshold
+        if (write_offset_ > kCompactThreshold) {
+            write_buffer_.erase(write_buffer_.begin(), write_buffer_.begin() + write_offset_);
+            write_offset_ = 0;
+        }
         return IoResult::Ok;
     } else if (n == 0) {
         return IoResult::Closed;
@@ -91,19 +98,26 @@ IoResult Connection::do_write() {
 }
 
 std::optional<Request> Connection::try_parse_request() {
-    if (read_buffer_.empty()) {
+    size_t available = read_buffer_.size() - read_offset_;
+    if (available == 0) {
         return std::nullopt;
     }
 
     // auto detect protocol on first request
     if (!protocol_detected_) {
-        uint8_t first_byte = read_buffer_[0];
+        uint8_t first_byte = read_buffer_[read_offset_];
         is_binary_ = (first_byte == 0x00 || first_byte > 127);
         protocol_detected_ = true;
     }
 
     if (is_binary_) {
-        // binary protocol: need 4 byte length header first
+        // binary protocol: compact first since BinaryProtocol expects buffer to start at message
+        if (read_offset_ > 0) {
+            read_buffer_.erase(read_buffer_.begin(), read_buffer_.begin() + read_offset_);
+            read_offset_ = 0;
+        }
+
+        // need 4 byte length header first
         if (read_buffer_.size() < 4) {
             return std::nullopt;
         }
@@ -119,15 +133,23 @@ std::optional<Request> Connection::try_parse_request() {
         return req;
 
     } else {
-        // text protocol: look for newline
-        auto it = std::find(read_buffer_.begin(), read_buffer_.end(), '\n');
+        // text protocol: look for newline (search from offset)
+        auto start = read_buffer_.begin() + read_offset_;
+        auto it = std::find(start, read_buffer_.end(), '\n');
         if (it == read_buffer_.end()) {
             return std::nullopt;
         }
 
         // extract line (excluding \n \r if present)
-        std::string line(read_buffer_.begin(), it);
-        read_buffer_.erase(read_buffer_.begin(), it + 1);
+        std::string line(start, it);
+        size_t consumed = (it - start) + 1;  // +1 for the newline
+        read_offset_ += consumed;
+
+        // compact buffer when consumed portion exceeds threshold
+        if (read_offset_ > kCompactThreshold) {
+            read_buffer_.erase(read_buffer_.begin(), read_buffer_.begin() + read_offset_);
+            read_offset_ = 0;
+        }
 
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
@@ -151,7 +173,7 @@ void Connection::queue_response(const Response& response) {
 }
 
 bool Connection::has_pending_write() const {
-    return !write_buffer_.empty();
+    return write_buffer_.size() > write_offset_;
 }
 
 }  // namespace kvstore::net::server

@@ -232,7 +232,7 @@ class Server::Impl {
         } catch (...) {
             //if connection creation fails, close fd to prevent leak
             close(client_fd);
-            throw
+            throw;
         }
 
         LOG_DEBUG("Client connected, fd=" + std::to_string(client_fd));

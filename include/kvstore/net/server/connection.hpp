@@ -65,6 +65,10 @@ class Connection {
     // buffers for partial reads/writes
     std::vector<uint8_t> read_buffer_;
     std::vector<uint8_t> write_buffer_;
+
+    size_t read_offset_{0};
+    size_t write_offset_{0};
+    static constexpr size_t kCompactThreshold = 4096;
 };
 
 }  // namespace kvstore::net::server
