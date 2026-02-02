@@ -1,26 +1,26 @@
-#include <gtest/gtest.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <gtest/gtest.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
+#include <memory>
 #include <thread>
 #include <unordered_map>
-#include <memory>
 
-#include "kvstore/net/server/event_loop.hpp"
-#include "kvstore/net/server/connection.hpp"
-#include "kvstore/net/types.hpp"
 #include "kvstore/core/store.hpp"
+#include "kvstore/net/server/connection.hpp"
+#include "kvstore/net/server/event_loop.hpp"
+#include "kvstore/net/types.hpp"
 
 using namespace kvstore::net::server;
 using namespace kvstore::net;
 
 class EventLoopIntegrationTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {
-        //create server socket
+        // create server socket
         server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
         ASSERT_GE(server_fd_, 0);
 
@@ -28,27 +28,28 @@ protected:
         int opt = 1;
         setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-        //bind to port 0 = "OS picks random available port"
+        // bind to port 0 = "OS picks random available port"
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = INADDR_ANY;
-        addr.sin_port = 0; //let OS choose port
+        addr.sin_port = 0;  // let OS choose port
 
-        //bind to port & start listening (queue up to 10 connections)
+        // bind to port & start listening (queue up to 10 connections)
         ASSERT_EQ(bind(server_fd_, (sockaddr*)&addr, sizeof(addr)), 0);
         ASSERT_EQ(listen(server_fd_, 10), 0);
 
-        //retrieve actual port the OS assigned
+        // retrieve actual port the OS assigned
         socklen_t len = sizeof(addr);
         getsockname(server_fd_, (sockaddr*)&addr, &len);
         port_ = ntohs(addr.sin_port);
 
-        //make non-blocking so accpet() returns immediately if no connection
+        // make non-blocking so accpet() returns immediately if no connection
         Connection::set_nonblocking(server_fd_);
     }
 
     void TearDown() override {
-        if(server_fd_ >= 0) close(server_fd_);
+        if (server_fd_ >= 0)
+            close(server_fd_);
     }
 
     int connect_client() {
@@ -66,12 +67,12 @@ protected:
 }
 
 TEST_F(EventLoopIntegrationTest, AcceptConnection) {
-    //verify that eventlopp can detect incoming connections with epoll    
+    // verify that eventlopp can detect incoming connections with epoll
     EventLoop loop;
     bool accepted = false;
 
-    //add server to epoll & watch for EPOLLIN (readable)
-    //callback is: accept connection, close client_fd, stop the loop.
+    // add server to epoll & watch for EPOLLIN (readable)
+    // callback is: accept connection, close client_fd, stop the loop.
     loop.add(server_fd_, EPOLLIN, [&](int fd, uint32_t events) {
         sockaddr_in client_addr{};
         sockeltn_t len = sizeof(client_addr);
@@ -82,15 +83,15 @@ TEST_F(EventLoopIntegrationTest, AcceptConnection) {
         loop.stop();
     });
 
-    //connect from another thread
+    // connect from another thread
     std::thread client([&]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         int fd = connect_client();
         close(fd);
     });
 
-    //loop.run() start, epoll_wait() blocks. on client connect, epoll wait returns, fire callback.
-    loop.run(); 
+    // loop.run() start, epoll_wait() blocks. on client connect, epoll wait returns, fire callback.
+    loop.run();
     client.join();
 
     EXPECT_TRUE(accepted);
@@ -100,7 +101,7 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
     EventLoop loop;
     std::unordered_map<int, std::unique_ptr<Connection>> connections;
 
-    //accept handler
+    // accept handler
     /*
         flow:
         - when server_fd_ is readable, accept new client, make it non blocking.
@@ -120,7 +121,8 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
         sockaddr_in client_addr{};
         socklen_t len = sizeof(client_addr);
         int client_fd = accept(fd, (sockaddr*)&client_addr, &len);
-        if(client_fd < 0) return;
+        if (client_fd < 0)
+            return;
 
         Connection::set_nonblocking(client_fd);
         connections[client_fd] = std::make_unique<Connection>(client_fd);
@@ -128,33 +130,33 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
         loop.add(client_fd, EPOLLIN, [&, client_fd](int fd, uint32_t ev) {
             auto& conn = connections[client_fd];
 
-            if(ev & EPOLLIN) {
+            if (ev & EPOLLIN) {
                 auto result = conn->do_read();
-                if(result == IoResult::Closed || result == IoResult::Error) {
+                if (result == IoResult::Closed || result == IoResult::Error) {
                     loop.remove(client_fd);
                     connections.erase(client_fd);
                     return;
                 }
 
-                //Try to parse request
-                if(auto req = conn -> try_parse_request()) {
-                    //echo back
+                // Try to parse request
+                if (auto req = conn->try_parse_request()) {
+                    // echo back
                     Response resp = Response::ok(req->key);
                     conn->queue_response(resp);
                     loop.modify(client_fd, EPOLLIN | EPOLLOUT);
                 }
             }
 
-            if(ev & EPOLLOUT) {
+            if (ev & EPOLLOUT) {
                 conn->do_write();
-                if(!conn->has-pending_write()) {
+                if (!conn->has - pending_write()) {
                     loop.modify(client_fd, EPOLLIN);
                 }
             }
         });
     });
 
-    //client thread
+    // client thread
     std::thread client([&]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         int fd = connect_client();
@@ -185,44 +187,45 @@ TEST_F(EventLoopIntegrationTest, MultipleClients) {
         sockaddr_in client_addr{};
         socklen_t len = sizeof(client_addr);
         int client_fd = accept(fd, (sockaddr*)&client_addr, &len);
-        if(client_fd < 0) return;
+        if (client_fd < 0)
+            return;
 
         Connection::set_nonblocking(client_fd);
         connections[client_fd] = std::make_unique<Connection>(client_fd);
 
         loop.add(client_fd, EPOLLIN, [&, client_fd](int fd, uint32_t ev) {
-            auto & conn = connections[client_fd];
-            
-            if(ev & EPOLLIN) {
+            auto& conn = connections[client_fd];
+
+            if (ev & EPOLLIN) {
                 auto result = conn->do_read();
-                if(result == IoResult::Closed || result == IoResult::Error) {
+                if (result == IoResult::Closed || result == IoResult::Error) {
                     loop.remove(client_fd);
                     connections.erase(client_fd);
                     client_served++;
-                    if(clients_served >= 3) {
+                    if (clients_served >= 3) {
                         loop.stop();
                     }
                     return;
                 }
 
-                if(auto req = conn->try_parse_request()) {
+                if (auto req = conn->try_parse_request()) {
                     conn->queue_response(Response::ok("pong"));
                     loop.modify(client_fd, EPOLLIN | EPOLLOUT);
                 }
             }
 
-            if(ev & EPOLLOUT) {
+            if (ev & EPOLLOUT) {
                 conn->do_write();
-                if(!conn->has_pending_write()) {
+                if (!conn->has_pending_write()) {
                     loop.modify(client_fd, EPOLLIN);
                 }
             }
         });
     });
 
-    //launch 3 clients
+    // launch 3 clients
     std::vector<std::thread> clients;
-    for(int i=0; i<3; ++i) {
+    for (int i = 0; i < 3; ++i) {
         clients.emplace_back([&, i]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(50 + i * 10));
             int fd = connect_client();
@@ -234,7 +237,8 @@ TEST_F(EventLoopIntegrationTest, MultipleClients) {
     }
 
     loop.run();
-    for(auto& t : clients) t.join();
+    for (auto& t : clients)
+        t.join();
 
     EXPECT_EQ(clients_served, 3);
 }

@@ -1,50 +1,50 @@
+#include "kvstore/net/server/event_loop.hpp"
+
 #include <gtest/gtest.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include <thread>
 
-#include "kvstore/net/server/event_loop.hpp"
-
 using namespace kvstore::net::server;
 
 class EventLoopTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {
-        //create a socketpair for testing - gives us 2 connected fds
-        //anything written to one can be read from other
+        // create a socketpair for testing - gives us 2 connected fds
+        // anything written to one can be read from other
         ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds_), 0);
     }
-    
+
     void TearDown() override {
-        if(fds_[0] >= 0) close(fds_[0]);
-        if(fds_[1] >= 0) close(fds_[1]);
+        if (fds_[0] >= 0)
+            close(fds_[0]);
+        if (fds_[1] >= 0)
+            close(fds_[1]);
     }
     int fds_[2] = {-1, -1};
 };
 
 TEST_F(EventLoopTest, CreateAndDestory) {
     EventLoop loop;
-    //should not throw
+    // should not throw
 }
 
 TEST_F(EventLoopTest, AddAndRemove) {
     EventLoop loop;
     bool called = false;
-    
-    loop.add(fds_[0], EPOLLIN, [&](int, uint32_t) {
-        called = true;
-    });
+
+    loop.add(fds_[0], EPOLLIN, [&](int, uint32_t) { called = true; });
 
     loop.remove(fds_[0]);
-    //should not throw
+    // should not throw
 }
 
 TEST_F(EventLoopTest, PollWithNoEvents) {
     EventLoop loop;
     loop.add(fds_[0], EPOLLIN, [](int, uint32_t) {});
 
-    //poll with 0 timeout - should return immedaitely with no events
+    // poll with 0 timeout - should return immedaitely with no events
     int n = loop.poll(0);
     EXPECT_EQ(n, 0);
 }
@@ -60,7 +60,7 @@ TEST_F(EventLoopTest, PollDetectsReadable) {
         EXPECT_TRUE(events & EPOLLIN);
     });
 
-    //write to fds_[1] makes fds_[0] readable
+    // write to fds_[1] makes fds_[0] readable
     const char* msg = "hello";
     write(fds_[1], msg, 5);
 
@@ -79,49 +79,47 @@ TEST_F(EventLoopTest, PollDetectsWritable) {
         EXPECT_TRUE(events & EPOLLOUT);
     });
 
-    //sokcet should be immediately writable
+    // sokcet should be immediately writable
     int n = loop.poll(100);
-    EXPECT_EQ(n,1);
+    EXPECT_EQ(n, 1);
     EXPECT_TRUE(called);
 }
 
 TEST_F(EventLoopTest, ModifyEvents) {
     EventLoop loop;
     int call_count = 0;
-    
-    //start with EPOLLIN only
-    loop.add(fds_[0], EPOLLIN, [&](int, uint32_t) {
-        call_count++;
-    });
 
-    //no data to read. should not trigger
+    // start with EPOLLIN only
+    loop.add(fds_[0], EPOLLIN, [&](int, uint32_t) { call_count++; });
+
+    // no data to read. should not trigger
     loop.poll(0);
     EXPECT_EQ(call_count, 0);
 
-    //modify to watch for EPOLLOUT
+    // modify to watch for EPOLLOUT
     loop.modify(fds_[0], EPOLLOUT);
 
-    //should now trigger (socket writable)
+    // should now trigger (socket writable)
     loop.poll(100);
     EXPECT_EQ(call_count, 1);
 }
 
 TEST_F(EventLoopTest, MultipleFileDescriptors) {
-    //create another scoketpair
+    // create another scoketpair
     int fds2[2];
     ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds2), 0);
 
     EventLoop loop;
     int count1 = 0, count2 = 0;
 
-    loop.add(fds_[0], EPOLLIN, [&](int, uint32_t) {count1++;});
-    loop.add(fds2[0], EPOLLIN, [&](int, uint32_t) {count2++;});
+    loop.add(fds_[0], EPOLLIN, [&](int, uint32_t) { count1++; });
+    loop.add(fds2[0], EPOLLIN, [&](int, uint32_t) { count2++; });
 
-    //write to both
+    // write to both
     write(fds_[1], "a", 1);
     write(fds2[1], "b", 1);
 
-    //should get both events
+    // should get both events
     int n = loop.poll(100);
     EXPECT_EQ(n, 2);
     EXPECT_EQ(count1, 1);
@@ -133,23 +131,19 @@ TEST_F(EventLoopTest, MultipleFileDescriptors) {
 
 TEST_F(EventLoopTest, RunAndStop) {
     EventLoop loop;
-    
-    loop.add(fds_[0], EPOLLIN, [&](int, uint32_t) {
-        loop.stop();
-    });
-    
-    //start loop in another thread
-    std::thread t([&]() {
-        loop.run();
-    });
 
-    //give loop time to start
+    loop.add(fds_[0], EPOLLIN, [&](int, uint32_t) { loop.stop(); });
+
+    // start loop in another thread
+    std::thread t([&]() { loop.run(); });
+
+    // give loop time to start
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-    //write to trigger callback which calls stop()
+    // write to trigger callback which calls stop()
     write(fds_[1], "x", 1);
 
-    //thread should exit
+    // thread should exit
     t.join();
 
     EXPECT_FALSE(loop.running());
@@ -160,16 +154,14 @@ TEST_F(EventLoopTest, StopFromAnotherThread) {
 
     loop.add(fds_[0], EPOLLIN, [](int, uint32_t) {});
 
-    std::thread t([&]() {
-        loop.run();
-    });
+    std::thread t([&]() { loop.run(); });
 
-    //give loop time to start
+    // give loop time to start
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-    //stop from main thread
+    // stop from main thread
     loop.stop();
-    
+
     t.join();
     EXPECT_FALSE(loop.running());
 }
@@ -177,14 +169,11 @@ TEST_F(EventLoopTest, StopFromAnotherThread) {
 TEST_F(EventLoopTest, CallbackException) {
     EventLoop loop;
 
-    loop.add(fds_[0], EPOLLIN, [](int, uint32_t) {
-        throw std::runtime_error("test exception");
-    });
+    loop.add(fds_[0], EPOLLIN, [](int, uint32_t) { throw std::runtime_error("test exception"); });
 
     write(fds_[1], "x", 1);
 
-    //should not crash - exception caught and logged
+    // should not crash - exception caught and logged
     int n = loop.poll(100);
-    EXPECT_EQ(n,1);
+    EXPECT_EQ(n, 1);
 }
-

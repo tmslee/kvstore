@@ -1,33 +1,35 @@
+#include "kvstore/net/server/connection.hpp"
+
+#include <fcntl.h>
 #include <gtest/gtest.h>
 #include <sys/socket.h>
-#include <fcntl.h>
 #include <unistd.h>
-#include <cstring>
 
-#include "kvstore/net/server/connection.hpp"
+#include <cstring>
 
 using namespace kvstore::net::server;
 using namespace kvstore::net;
 
 class ConnectionTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {
         ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds_), 0);
         Connection::set_nonblocking(fds_[0]);
         Connection::set_nonblocking(fds_[1]);
-    }  
-
-    void TearDown() override {
-        if(fds_[1] >= 0) close (fds_[1]);
     }
 
-    int fds_[2] = {-1,-1};
+    void TearDown() override {
+        if (fds_[1] >= 0)
+            close(fds_[1]);
+    }
+
+    int fds_[2] = {-1, -1};
 };
 
 TEST_F(ConnectionTest, CreateAndDestory) {
     int fd = fds_[0];
     Connection conn(fd);
-    fds_[0] = -1; //connection takes ownership
+    fds_[0] = -1;  // connection takes ownership
     EXPECT_EQ(conn.fd(), fd);
 }
 
@@ -148,7 +150,7 @@ TEST_F(ConnectionTest, WriteMultipleResponses) {
     conn.queue_response(Response::ok("val1"));
     conn.queue_response(Response::ok("val2"));
 
-    while(conn.has_pending_write()) {
+    while (conn.has_pending_write()) {
         conn.do_write();
     }
 
