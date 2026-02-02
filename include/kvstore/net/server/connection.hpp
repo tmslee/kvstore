@@ -3,9 +3,9 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
-#include <optional>
 
 #include "kvstore/net/server/protocol_handler.hpp"
 #include "kvstore/net/types.hpp"

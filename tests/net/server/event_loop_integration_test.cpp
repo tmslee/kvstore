@@ -5,10 +5,10 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <cstring>
 #include <memory>
 #include <thread>
 #include <unordered_map>
-#include <cstring>
 
 #include "kvstore/core/store.hpp"
 #include "kvstore/net/server/connection.hpp"
@@ -130,7 +130,8 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
 
         loop.add(client_fd, EPOLLIN, [&, client_fd](int, uint32_t ev) {
             auto it = connections.find(client_fd);
-            if (it == connections.end()) return;  // already removed
+            if (it == connections.end())
+                return;  // already removed
             auto& conn = it->second;
 
             if (ev & EPOLLIN) {
@@ -202,7 +203,8 @@ TEST_F(EventLoopIntegrationTest, MultipleClients) {
 
         loop.add(client_fd, EPOLLIN, [&, client_fd](int, uint32_t ev) {
             auto it = connections.find(client_fd);
-            if (it == connections.end()) return;  // already removed
+            if (it == connections.end())
+                return;  // already removed
             auto& conn = it->second;
 
             if (ev & EPOLLIN) {

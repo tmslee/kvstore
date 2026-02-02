@@ -50,7 +50,8 @@ void EventLoop::remove(int fd) {
     epoll_event ev{};
     epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, &ev);  // ignore errors (fd might already be closed)
 
-    // !!!!!IMPORTANT!!!!: If we're inside a callback, defer the removal to avoid destroying the callback while executing
+    // !!!!!IMPORTANT!!!!: If we're inside a callback, defer the removal to avoid destroying the
+    // callback while executing
     if (in_callback_) {
         pending_removals_.push_back(fd);
     } else {

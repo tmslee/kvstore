@@ -73,8 +73,9 @@ class EventLoop {
     int epoll_fd_{-1};
     std::atomic<bool> running_{false};
     std::unordered_map<int, Callback> callbacks_;
-    std::vector<int> pending_removals_;  // deferred removals to avoid destroying callback while executing
-    bool in_callback_{false};            // true while executing a callback
+    std::vector<int>
+        pending_removals_;     // deferred removals to avoid destroying callback while executing
+    bool in_callback_{false};  // true while executing a callback
 };
 
 }  // namespace kvstore::net::server

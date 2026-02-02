@@ -230,7 +230,7 @@ class Server::Impl {
         try {
             connections_[client_fd] = std::make_unique<Connection>(client_fd, limits_);
         } catch (...) {
-            //if connection creation fails, close fd to prevent leak
+            // if connection creation fails, close fd to prevent leak
             close(client_fd);
             throw;
         }
