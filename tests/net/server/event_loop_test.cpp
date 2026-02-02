@@ -169,7 +169,8 @@ TEST_F(EventLoopTest, StopFromAnotherThread) {
 TEST_F(EventLoopTest, CallbackException) {
     EventLoop loop;
 
-    loop.add(fds_[0], kEventRead, [](int, uint32_t) { throw std::runtime_error("test exception"); });
+    loop.add(fds_[0], kEventRead,
+             [](int, uint32_t) { throw std::runtime_error("test exception"); });
 
     write(fds_[1], "x", 1);
 
