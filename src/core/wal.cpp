@@ -3,8 +3,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include <stdexcept>
 #include <cstring>
+#include <stdexcept>
 
 #include "kvstore/util/binary_io.hpp"
 
