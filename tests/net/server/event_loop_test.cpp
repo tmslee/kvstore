@@ -62,7 +62,7 @@ TEST_F(EventLoopTest, PollDetectsReadable) {
 
     // write to fds_[1] makes fds_[0] readable
     const char* msg = "hello";
-    (void) write(fds_[1], msg, 5);
+    (void)write(fds_[1], msg, 5);
 
     int n = loop.poll(100);
     EXPECT_EQ(n, 1);
@@ -116,8 +116,8 @@ TEST_F(EventLoopTest, MultipleFileDescriptors) {
     loop.add(fds2[0], kEventRead, [&](int, uint32_t) { count2++; });
 
     //  write to both
-    (void) write(fds_[1], "a", 1);
-    (void) write(fds2[1], "b", 1);
+    (void)write(fds_[1], "a", 1);
+    (void)write(fds2[1], "b", 1);
 
     // should get both events
     int n = loop.poll(100);
@@ -141,7 +141,7 @@ TEST_F(EventLoopTest, RunAndStop) {
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     // write to trigger callback which calls stop()
-    (void) write(fds_[1], "x", 1);
+    (void)write(fds_[1], "x", 1);
 
     // thread should exit
     t.join();
@@ -172,7 +172,7 @@ TEST_F(EventLoopTest, CallbackException) {
     loop.add(fds_[0], kEventRead,
              [](int, uint32_t) { throw std::runtime_error("test exception"); });
 
-    (void) write(fds_[1], "x", 1);
+    (void)write(fds_[1], "x", 1);
 
     // should not crash - exception caught and logged
     int n = loop.poll(100);
