@@ -16,10 +16,11 @@ add_compile_options(
     -Werror
 )
 
-# sanitizer options
+# Sanitizer options
 option(ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(ENABLE_TSAN "Enable ThreadSanitizer" OFF)
 option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
+option(ENABLE_COVERAGE "Enable code coverage with gcov" OFF)
 
 if(ENABLE_ASAN)
     add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
@@ -34,6 +35,11 @@ endif()
 if(ENABLE_UBSAN)
     add_compile_options(-fsanitize=undefined)
     add_link_options(-fsanitize=undefined)
+endif()
+
+if(ENABLE_COVERAGE)
+    add_compile_options(--coverage -fprofile-arcs -ftest-coverage)
+    add_link_options(--coverage)
 endif()
 
 # Define the library
@@ -105,3 +111,32 @@ FetchContent_MakeAvailable(googletest)
 # Enable testing
 enable_testing()
 add_subdirectory(tests)
+
+# Coverage report target (requires lcov and genhtml)
+if(ENABLE_COVERAGE)
+    find_program(LCOV lcov)
+    find_program(GENHTML genhtml)
+
+    if(LCOV AND GENHTML)
+        add_custom_target(coverage
+            # Reset counters
+            COMMAND ${LCOV} --directory . --zerocounters
+            # Run tests
+            COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+            # Capture coverage data
+            COMMAND ${LCOV} --directory . --capture --output-file coverage.info
+            # Remove external/test coverage
+            COMMAND ${LCOV} --remove coverage.info
+                '/usr/*'
+                '${CMAKE_BINARY_DIR}/_deps/*'
+                '*/tests/*'
+                --output-file coverage.info
+            # Generate HTML report
+            COMMAND ${GENHTML} coverage.info --output-directory coverage_report
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            COMMENT "Generating code coverage report..."
+        )
+    else()
+        message(WARNING "lcov/genhtml not found - coverage target disabled")
+    endif()
+endif()
