@@ -29,6 +29,32 @@ LogLevel parse_log_level(const std::string& s) {
     return LogLevel::Info;
 }
 
+// note: we use cerr here becuase we initialize logger AFTER config parsing when server is
+// initialized
+int safe_stoi(const std::string& s, int default_val, const std::string& field = "") {
+    try {
+        return std::stoi(s);
+    } catch (const std::exception&) {
+        if (!field.empty()) {
+            std::cerr << "Warning: Invalid value for " << field << ": '" << s
+                      << "' using default\n";
+        }
+        return default_val;
+    }
+}
+
+uint64_t safe_stoull(const std::string& s, uint64_t default_val, const std::string& field = "") {
+    try {
+        return std::stoull(s);
+    } catch (const std::exception&) {
+        if (!field.empty()) {
+            std::cerr << "Warning: Invalid value for " << field << ": '" << s
+                      << "', using default\n";
+        }
+        return default_val;
+    }
+}
+
 }  // namespace
 
 std::optional<Config> Config::load_file(const std::filesystem::path& path) {
@@ -63,27 +89,27 @@ std::optional<Config> Config::load_file(const std::filesystem::path& path) {
         if (key == "host") {
             config.host = value;
         } else if (key == "port") {
-            config.port = static_cast<uint16_t>(std::stoi(value));
+            config.port = static_cast<uint16_t>(safe_stoi(value, 6379, "port"));
         } else if (key == "max_connections") {
-            config.max_connections = std::stoull(value);
+            config.max_connections = safe_stoull(value, 1000, "max_connections");
         } else if (key == "client_timeout_seconds") {
-            config.client_timeout_seconds = std::stoi(value);
+            config.client_timeout_seconds = safe_stoi(value, 300, "client_timeout_seconds");
         } else if (key == "data_dir") {
             config.data_dir = value;
         } else if (key == "snapshot_threshold") {
-            config.snapshot_threshold = std::stoull(value);
+            config.snapshot_threshold = safe_stoull(value, 10000, "snapshot_threshold");
         } else if (key == "compaction_threshold") {
-            config.compaction_threshold = std::stoull(value);
+            config.compaction_threshold = safe_stoull(value, 1000, "compaction_threshold");
         } else if (key == "use_disk_store") {
             config.use_disk_store = (value == "true" || value == "1");
         } else if (key == "log_level") {
             config.log_level = parse_log_level(value);
         } else if (key == "max_message_size") {
-            config.max_message_size = std::stoull(value);
+            config.max_message_size = safe_stoull(value, 67108864, "max_message_size");
         } else if (key == "max_key_size") {
-            config.max_key_size = std::stoull(value);
+            config.max_key_size = safe_stoull(value, 1024, "max_key_size");
         } else if (key == "max_value_size") {
-            config.max_value_size = std::stoull(value);
+            config.max_value_size = safe_stoull(value, 67108864, "max_value_size");
         }
     }
 
@@ -118,27 +144,27 @@ std::optional<Config> Config::parse_args(int argc, char* argv[]) {
         if ((arg == "-H" || arg == "--host") && i + 1 < argc) {
             config.host = argv[++i];
         } else if ((arg == "-p" || arg == "--port") && i + 1 < argc) {
-            config.port = static_cast<uint16_t>(std::stoi(argv[++i]));
+            config.port = static_cast<uint16_t>(safe_stoi(argv[++i], 6379, "port"));
         } else if ((arg == "-d" || arg == "--data-dir") && i + 1 < argc) {
             config.data_dir = argv[++i];
         } else if ((arg == "-l" || arg == "--log-level") && i + 1 < argc) {
             config.log_level = parse_log_level(argv[++i]);
         } else if (arg == "--max-connections" && i + 1 < argc) {
-            config.max_connections = std::stoull(argv[++i]);
+            config.max_connections = safe_stoull(argv[++i], 1000, "max_connections");
         } else if (arg == "--client-timeout" && i + 1 < argc) {
-            config.client_timeout_seconds = std::stoi(argv[++i]);
+            config.client_timeout_seconds = safe_stoi(argv[++i], 300, "client_timeout_seconds");
         } else if (arg == "--snapshot-threshold" && i + 1 < argc) {
-            config.snapshot_threshold = std::stoull(argv[++i]);
+            config.snapshot_threshold = safe_stoull(argv[++i], 10000, "snapshot_threshold");
         } else if (arg == "--compaction-threshold" && i + 1 < argc) {
-            config.compaction_threshold = std::stoull(argv[++i]);
+            config.compaction_threshold = safe_stoull(argv[++i], 1000, "compaction_threshold");
         } else if (arg == "--disk-store") {
             config.use_disk_store = true;
         } else if (arg == "--max-message-size" && i + 1 < argc) {
-            config.max_message_size = std::stoull(argv[++i]);
+            config.max_message_size = safe_stoull(argv[++i], 67108864, "max_message_size");
         } else if (arg == "--max-key-size" && i + 1 < argc) {
-            config.max_key_size = std::stoull(argv[++i]);
+            config.max_key_size = safe_stoull(argv[++i], 1024, "max_key_size");
         } else if (arg == "--max-value-size" && i + 1 < argc) {
-            config.max_value_size = std::stoull(argv[++i]);
+            config.max_value_size = safe_stoull(argv[++i], 67108864, "max_value_size");
         } else if ((arg == "-c" || arg == "--config") && i + 1 < argc) {
             // Config file handled separately in main
             ++i;

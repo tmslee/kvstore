@@ -17,11 +17,7 @@ Connection::Connection(int fd, const ProtocolLimits& limits) : fd_(fd), limits_(
     write_buffer_.reserve(4096);
 }
 
-Connection::~Connection() {
-    if (fd_ >= 0) {
-        close(fd_);
-    }
-}
+Connection::~Connection() = default;  // FdGuard handles fd cleanup
 
 /*
 Blocking (default):
@@ -51,7 +47,7 @@ bool Connection::set_nonblocking(int fd) {
 
 IoResult Connection::do_read() {
     uint8_t buf[4096];
-    ssize_t n = recv(fd_, buf, sizeof(buf), 0);
+    ssize_t n = recv(fd_.get(), buf, sizeof(buf), 0);
 
     if (n > 0) {
         // check size limit before appending
@@ -78,7 +74,7 @@ IoResult Connection::do_write() {
     }
 
     // send from offset position (skip already-sent data)
-    ssize_t n = send(fd_, write_buffer_.data() + write_offset_, pending, MSG_NOSIGNAL);
+    ssize_t n = send(fd_.get(), write_buffer_.data() + write_offset_, pending, MSG_NOSIGNAL);
 
     if (n > 0) {
         write_offset_ += n;
@@ -89,7 +85,8 @@ IoResult Connection::do_write() {
         }
         return IoResult::Ok;
     } else if (n == 0) {
-        return IoResult::Closed;
+        // send() returning 0 with pending data is rare - treat as WouldBlock and retry
+        return IoResult::WouldBlock;
     } else {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return IoResult::WouldBlock;
@@ -105,9 +102,11 @@ std::optional<Request> Connection::try_parse_request() {
     }
 
     // auto detect protocol on first request
+    // Binary protocol: first 4 bytes are length (big-endian uint32), so first byte is 0x00 for
+    // messages < 16MB Text protocol: commands start with ASCII letters (GET, PUT, etc.), never 0x00
     if (!protocol_detected_) {
         uint8_t first_byte = read_buffer_[read_offset_];
-        is_binary_ = (first_byte == 0x00 || first_byte > 127);
+        is_binary_ = (first_byte == 0x00);
         protocol_detected_ = true;
     }
 

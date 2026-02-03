@@ -86,7 +86,10 @@ TEST_F(EventLoopIntegrationTest, AcceptConnection) {
 
     // connect from another thread
     std::thread client([&]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        // wait for loop to actually be running (deterministic, no fixed sleep)
+        while (!loop.running()) {
+            std::this_thread::yield();
+        }
         int fd = connect_client();
         close(fd);
     });
@@ -162,7 +165,10 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
 
     // client thread
     std::thread client([&]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        // wait for loop to actually be running (deterministic, no fixed sleep)
+        while (!loop.running()) {
+            std::this_thread::yield();
+        }
         int fd = connect_client();
 
         const char* msg = "GET hello\r\n";
@@ -237,8 +243,15 @@ TEST_F(EventLoopIntegrationTest, MultipleClients) {
     // launch 3 clients
     std::vector<std::thread> clients;
     for (int i = 0; i < 3; ++i) {
-        clients.emplace_back([this, i]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50 + i * 10));
+        clients.emplace_back([this, i, &loop]() {
+            // wait for loop to actually be running (deterministic, no fixed sleep)
+            while (!loop.running()) {
+                std::this_thread::yield();
+            }
+            // small stagger to avoid all clients hitting server simultaneously
+            if (i > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(i * 5));
+            }
             int fd = connect_client();
             [[maybe_unused]] auto ignored1 = write(fd, "PING\r\n", 6);
             char buf[64];

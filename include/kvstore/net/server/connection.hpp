@@ -9,6 +9,7 @@
 
 #include "kvstore/net/server/protocol_handler.hpp"
 #include "kvstore/net/types.hpp"
+#include "kvstore/util/fd_guard.hpp"
 
 namespace kvstore::net::server {
 
@@ -50,14 +51,14 @@ class Connection {
 
     // get file descriptor
     [[nodiscard]] int fd() const noexcept {
-        return fd_;
+        return fd_.get();
     }
 
     // set socket to non-blocking mode
     static bool set_nonblocking(int fd);
 
    private:
-    int fd_;
+    util::FdGuard fd_;
     ProtocolLimits limits_;
     bool is_binary_{false};
     bool protocol_detected_{false};
