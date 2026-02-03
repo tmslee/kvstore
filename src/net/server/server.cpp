@@ -221,6 +221,10 @@ class Server::Impl {
         // check connection limit
         if (connections_.size() >= options_.max_connections) {
             LOG_WARN("Max connections reached, rejecting client");
+            // Send error response before closing (text format - works for text clients,
+            // binary clients will see garbled text but won't hang waiting)
+            const char* error_msg = "ERROR max connections reached\n";
+            send(client_fd, error_msg, strlen(error_msg), MSG_NOSIGNAL);
             close(client_fd);
             return;
         }
