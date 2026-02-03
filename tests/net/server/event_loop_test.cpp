@@ -137,8 +137,10 @@ TEST_F(EventLoopTest, RunAndStop) {
     // start loop in another thread
     std::thread t([&]() { loop.run(); });
 
-    // give loop time to start
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    // wait for loop to actually be running (deterministic, no fixed sleep)
+    while (!loop.running()) {
+        std::this_thread::yield();
+    }
 
     // write to trigger callback which calls stop()
     [[maybe_unused]] auto ignored = write(fds_[1], "x", 1);
@@ -156,8 +158,10 @@ TEST_F(EventLoopTest, StopFromAnotherThread) {
 
     std::thread t([&]() { loop.run(); });
 
-    // give loop time to start
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    // wait for loop to actually be running (deterministic, no fixed sleep)
+    while (!loop.running()) {
+        std::this_thread::yield();
+    }
 
     // stop from main thread
     loop.stop();
