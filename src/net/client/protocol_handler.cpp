@@ -9,6 +9,9 @@ namespace kvstore::net::client {
 
 namespace {
 
+constexpr size_t kMaxLineSize = 64*1024; //64kb for text responses
+constexpr size_t kMaxMessageSize = 64*1024*1024; //64mb for binary responses
+
 bool send_all(int fd, const void* data, size_t len) {
     const uint8_t* ptr = static_cast<const uint8_t*>(data);
     size_t total_sent = 0;
@@ -22,7 +25,7 @@ bool send_all(int fd, const void* data, size_t len) {
     return true;
 }
 
-std::string read_line(int fd, std::string& buffer) {
+std::string read_line(int fd, std::string& buffer, size_t max_size = kMaxLineSize) {
     char c;
     while (true) {
         size_t pos = buffer.find('\n');
@@ -35,6 +38,11 @@ std::string read_line(int fd, std::string& buffer) {
             return line;
         }
 
+        if(buffer.size() >= max_size) {
+            return ""; //signal error - response too long
+        }
+
+        //read more data
         ssize_t n = recv(fd, &c, 1, 0);
         if (n <= 0) {
             return "";
@@ -67,6 +75,11 @@ std::optional<Response> BinaryProtocolHandler::read_response(int fd) {
     uint8_t chunk[256];
 
     while (!BinaryProtocol::has_complete_message(buffer_)) {
+        //prevent unbounded memory growth
+        if(buffer_.size() >= kMaxMessageSize) {
+            return std::nullopt; //message too large
+        }
+
         ssize_t n = recv(fd, chunk, sizeof(chunk), 0);
         if (n <= 0) {
             return std::nullopt;
