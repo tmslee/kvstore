@@ -46,10 +46,11 @@ void Logger::log(LogLevel level, std::string_view message) {
 
     std::string line =
         timestamp() + " [" + std::string(level_string(level)) + "] " + std::string(message) + "\n";
-    std::lock_guard lock(mutex_);
+    std::lock_guard lock(mutex_); //mutex to protect cout/cerr output
     std::ostream& out = (level >= LogLevel::Warn) ? std::cerr : std::cout;
     out << line;
 }
+
 
 std::string Logger::timestamp() const {
     // get current time as time_point
@@ -58,11 +59,20 @@ std::string Logger::timestamp() const {
     auto time = std::chrono::system_clock::to_time_t(now);
     // get millisecods portion
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+    /*
+        note: std::localtime() returns pointer to a static internal tm struct that is reused on every call. if 2 threads call localtime() concurrently:
+            1. thread A calls localtime() -> fills static tm with time A
+            2. thread B calls localtime() -> overwrites static tm with time B
+            3. thread A reads tm struct -> gets corrupted/mixed data from time B
+        resulting in corrupted timestamps in logs or worse UB
+        we use localtime_r() - POSIX thread-safe version
+    */
+    std::tm tm_buf{};
+    localtime_r(&time, &tm_buf); //thread-safe: writes to our buffer, not static
 
     std::ostringstream oss;
     // format: "2024-01-15 10:30:45"
-    oss << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S");
-
+    oss << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S");
     // append ".123" for milliseconds
     oss << '.' << std::setfill('0') << std::setw(3) << ms.count();
     return oss.str();
