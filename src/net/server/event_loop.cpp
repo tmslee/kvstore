@@ -107,7 +107,8 @@ void EventLoop::remove(int fd) {
     // EPOLL_CTL_DEL ignores the event parameter (can be nullptr in newer kernels)
     // but older kernels require non-null so we pass dummy
     epoll_event ev{};
-    epoll_ctl(event_fd_.get(), EPOLL_CTL_DEL, fd, &ev);  // ignore errors (fd might already be closed)
+    epoll_ctl(event_fd_.get(), EPOLL_CTL_DEL, fd,
+              &ev);  // ignore errors (fd might already be closed)
 #elif defined(__APPLE__) || defined(__FreeBSD__)
     // Remove both read and write filters (ignore errors - fd might already be closed)
     struct kevent changes[2];

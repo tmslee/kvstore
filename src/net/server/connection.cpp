@@ -102,8 +102,8 @@ std::optional<Request> Connection::try_parse_request() {
     }
 
     // auto detect protocol on first request
-    // Binary protocol: first 4 bytes are length (big-endian uint32), so first byte is 0x00 for messages < 16MB
-    // Text protocol: commands start with ASCII letters (GET, PUT, etc.), never 0x00
+    // Binary protocol: first 4 bytes are length (big-endian uint32), so first byte is 0x00 for
+    // messages < 16MB Text protocol: commands start with ASCII letters (GET, PUT, etc.), never 0x00
     if (!protocol_detected_) {
         uint8_t first_byte = read_buffer_[read_offset_];
         is_binary_ = (first_byte == 0x00);

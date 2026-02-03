@@ -3,12 +3,12 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <cstring>
 #include <mutex>
 #include <shared_mutex>
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
-#include <cstring>
 
 #include "kvstore/util/binary_io.hpp"
 #include "kvstore/util/fd_guard.hpp"
@@ -54,8 +54,9 @@ class DiskStore::Impl {
         if (!file_exists || std::filesystem::file_size(data_path_) == 0) {
             util::write_int_fd<uint32_t>(fd_.get(), kMagic);
             util::write_int_fd<uint32_t>(fd_.get(), kVersion);
-            if(fsync(fd_.get()) != 0) {
-                throw std::runtime_error("failed to fsync data file handler: " + std::string(strerror(errno)));
+            if (fsync(fd_.get()) != 0) {
+                throw std::runtime_error("failed to fsync data file handler: " +
+                                         std::string(strerror(errno)));
             }
         } else {
             load_index();
@@ -157,8 +158,9 @@ class DiskStore::Impl {
 
         util::write_int_fd<uint32_t>(fd_.get(), kMagic);
         util::write_int_fd<uint32_t>(fd_.get(), kVersion);
-        if(fsync(fd_.get()) != 0) {
-            throw std::runtime_error("failed ot fsync after clear: " + std::string(strerror(errno)));
+        if (fsync(fd_.get()) != 0) {
+            throw std::runtime_error("failed ot fsync after clear: " +
+                                     std::string(strerror(errno)));
         }
 
         index_.clear();
@@ -226,25 +228,29 @@ class DiskStore::Impl {
             // fetch type, key, value, expiration time
             uint8_t entry_type;
             if (!util::read_int_fd<uint8_t>(fd_.get(), entry_type)) {
-                LOG_WARN("Corrupted entry at offset " + std::to_string(offset) + ": failed to read entry type");
+                LOG_WARN("Corrupted entry at offset " + std::to_string(offset) +
+                         ": failed to read entry type");
                 ++entries_corrupted;
                 break;
             }
             std::string key;
             if (!util::read_string_fd(fd_.get(), key)) {
-                LOG_WARN("Corrupted entry at offset " + std::to_string(offset) + ": failed to read key");
+                LOG_WARN("Corrupted entry at offset " + std::to_string(offset) +
+                         ": failed to read key");
                 ++entries_corrupted;
                 break;
             }
             std::string value;
             if (!util::read_string_fd(fd_.get(), value)) {
-                LOG_WARN("Corrupted entry at offset " + std::to_string(offset) + ": failed to read value");
+                LOG_WARN("Corrupted entry at offset " + std::to_string(offset) +
+                         ": failed to read value");
                 ++entries_corrupted;
                 break;
             }
             uint8_t has_expiration;
             if (!util::read_int_fd<uint8_t>(fd_.get(), has_expiration)) {
-                LOG_WARN("Corrupted entry at offset " + std::to_string(offset) + ": failed to read expiration flag");
+                LOG_WARN("Corrupted entry at offset " + std::to_string(offset) +
+                         ": failed to read expiration flag");
                 ++entries_corrupted;
                 break;
             }
@@ -253,7 +259,8 @@ class DiskStore::Impl {
             if (has_expiration != 0) {
                 uint64_t expires_at_ms;
                 if (!util::read_int_fd<uint64_t>(fd_.get(), expires_at_ms)) {
-                    LOG_WARN("Corrupted entry at offset " + std::to_string(offset) + ": failed to read expiration time");
+                    LOG_WARN("Corrupted entry at offset " + std::to_string(offset) +
+                             ": failed to read expiration time");
                     ++entries_corrupted;
                     break;
                 }
@@ -284,13 +291,15 @@ class DiskStore::Impl {
             last_good_offset = lseek(fd_.get(), 0, SEEK_CUR);
         }
 
-        //log summary
-        LOG_INFO("Index loaded: " + std::to_string(entries_loaded) + " entries, " + std::to_string(tombstone_count_) + " tombstones");
+        // log summary
+        LOG_INFO("Index loaded: " + std::to_string(entries_loaded) + " entries, " +
+                 std::to_string(tombstone_count_) + " tombstones");
 
-        if(entries_corrupted > 0 || last_good_offset < static_cast<uint64_t>(file_size)) {
-            LOG_WARN("Data file may be corrupted - loaded " + std::to_string(entries_loaded) + " entries, stopped at offset " + std::to_string(last_good_offset) + " of " + std::to_string(file_size) + " bytes");
+        if (entries_corrupted > 0 || last_good_offset < static_cast<uint64_t>(file_size)) {
+            LOG_WARN("Data file may be corrupted - loaded " + std::to_string(entries_loaded) +
+                     " entries, stopped at offset " + std::to_string(last_good_offset) + " of " +
+                     std::to_string(file_size) + " bytes");
         }
-        
     }
 
     void append_entry(std::string_view key, std::string_view value,
@@ -411,7 +420,8 @@ class DiskStore::Impl {
             uint8_t has_expiration = entry.expires_at.has_value() ? 1 : 0;
             util::write_int_fd<uint8_t>(temp_fd.get(), has_expiration);
             if (entry.expires_at.has_value()) {
-                util::write_int_fd<uint64_t>(temp_fd.get(), util::to_epoch_ms(entry.expires_at.value()));
+                util::write_int_fd<uint64_t>(temp_fd.get(),
+                                             util::to_epoch_ms(entry.expires_at.value()));
             }
         }
 
@@ -463,10 +473,11 @@ class DiskStore::Impl {
         }
 
         // fsync temp file before rename
-        if(fsync(temp_fd.get()) != 0) {
+        if (fsync(temp_fd.get()) != 0) {
             temp_fd.reset();
             std::filesystem::remove(temp_path);
-            throw std::runtime_error("failed to fsync compacted data file: " + std::string(strerror(errno)));
+            throw std::runtime_error("failed to fsync compacted data file: " +
+                                     std::string(strerror(errno)));
         }
 
         temp_fd.reset();  // Close before rename
@@ -484,11 +495,13 @@ class DiskStore::Impl {
         }
         util::FdGuard dir_fd(open(dir_path.c_str(), O_RDONLY));
         if (dir_fd) {
-            if(fsync(dir_fd.get()) != 0) {
-                LOG_WARN("failed to fsync directory after compaction rename: " + std::string(strerror(errno)));
+            if (fsync(dir_fd.get()) != 0) {
+                LOG_WARN("failed to fsync directory after compaction rename: " +
+                         std::string(strerror(errno)));
             }
         } else {
-            LOG_WARN("failed to open directory for fsync after compaction rename: " + std::string(strerror(errno)));
+            LOG_WARN("failed to open directory for fsync after compaction rename: " +
+                     std::string(strerror(errno)));
         }
 
         // reopen the data file

@@ -29,24 +29,27 @@ LogLevel parse_log_level(const std::string& s) {
     return LogLevel::Info;
 }
 
-// note: we use cerr here becuase we initialize logger AFTER config parsing when server is initialized
+// note: we use cerr here becuase we initialize logger AFTER config parsing when server is
+// initialized
 int safe_stoi(const std::string& s, int default_val, const std::string& field = "") {
     try {
         return std::stoi(s);
     } catch (const std::exception&) {
-        if(!field.empty()) {
-            std::cerr << "Warning: Invalid value for " << field << ": '" << s << "' using default\n";
+        if (!field.empty()) {
+            std::cerr << "Warning: Invalid value for " << field << ": '" << s
+                      << "' using default\n";
         }
         return default_val;
     }
 }
 
 uint64_t safe_stoull(const std::string& s, uint64_t default_val, const std::string& field = "") {
-        try {
+    try {
         return std::stoull(s);
     } catch (const std::exception&) {
         if (!field.empty()) {
-            std::cerr << "Warning: Invalid value for " << field << ": '" << s << "', using default\n";
+            std::cerr << "Warning: Invalid value for " << field << ": '" << s
+                      << "', using default\n";
         }
         return default_val;
     }

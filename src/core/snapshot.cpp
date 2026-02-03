@@ -3,12 +3,12 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include <stdexcept>
 #include <cstring>
+#include <stdexcept>
 
-#include "kvstore/util/logger.hpp"
 #include "kvstore/util/binary_io.hpp"
 #include "kvstore/util/fd_guard.hpp"
+#include "kvstore/util/logger.hpp"
 
 namespace kvstore::core {
 
@@ -74,10 +74,12 @@ void Snapshot::save(const EntryIterator& iterate) {
     util::FdGuard dir_guard(open(dir_path.c_str(), O_RDONLY));
     if (dir_guard) {
         if (fsync(dir_guard.get()) != 0) {
-            LOG_WARN("failed to fsync directory after snapshot rename: " + std::string(strerror(errno)));
+            LOG_WARN("failed to fsync directory after snapshot rename: " +
+                     std::string(strerror(errno)));
         }
     } else {
-        LOG_WARN("failed to open directory for fsync after snapshot rename: " + std::string(strerror(errno)));
+        LOG_WARN("failed to open directory for fsync after snapshot rename: " +
+                 std::string(strerror(errno)));
     }
 }
 

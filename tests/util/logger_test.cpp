@@ -8,7 +8,9 @@ namespace kvstore::util::test {
 class LogLevelGuard {
    public:
     LogLevelGuard() : saved_level_(Logger::instance().level()) {}
-    ~LogLevelGuard() { Logger::instance().set_level(saved_level_); }
+    ~LogLevelGuard() {
+        Logger::instance().set_level(saved_level_);
+    }
 
     LogLevelGuard(const LogLevelGuard&) = delete;
     LogLevelGuard& operator=(const LogLevelGuard&) = delete;

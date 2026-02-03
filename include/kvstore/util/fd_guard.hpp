@@ -7,7 +7,7 @@ namespace kvstore::util {
 
 // RAII wrapper for file descriptors - auto-closes on destruction
 class FdGuard {
-public:
+   public:
     explicit FdGuard(int fd = -1) : fd_(fd) {}
 
     ~FdGuard() {
@@ -36,7 +36,9 @@ public:
         return *this;
     }
 
-    [[nodiscard]] int get() const { return fd_; }
+    [[nodiscard]] int get() const {
+        return fd_;
+    }
 
     // Release ownership - caller is responsible for closing
     int release() {
@@ -53,10 +55,14 @@ public:
         fd_ = fd;
     }
 
-    [[nodiscard]] bool valid() const { return fd_ >= 0; }
-    explicit operator bool() const { return valid(); }
+    [[nodiscard]] bool valid() const {
+        return fd_ >= 0;
+    }
+    explicit operator bool() const {
+        return valid();
+    }
 
-private:
+   private:
     int fd_ = -1;
 };
 

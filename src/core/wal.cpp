@@ -6,9 +6,9 @@
 #include <cstring>
 #include <stdexcept>
 
-#include "kvstore/util/logger.hpp"
 #include "kvstore/util/binary_io.hpp"
 #include "kvstore/util/fd_guard.hpp"
+#include "kvstore/util/logger.hpp"
 
 namespace kvstore::core {
 
@@ -41,8 +41,7 @@ WriteAheadLog::~WriteAheadLog() = default;  // FdGuard handles fd cleanup
     mutex is just default constructed fresh in new object, FdGuard handles fd transfer
 */
 WriteAheadLog::WriteAheadLog(WriteAheadLog&& other) noexcept
-    : path_(std::move(other.path_)), fd_(std::move(other.fd_)) {
-}
+    : path_(std::move(other.path_)), fd_(std::move(other.fd_)) {}
 
 WriteAheadLog& WriteAheadLog::operator=(WriteAheadLog&& other) noexcept {
     if (this != &other) {
@@ -55,7 +54,7 @@ WriteAheadLog& WriteAheadLog::operator=(WriteAheadLog&& other) noexcept {
 void WriteAheadLog::write_header() {
     util::write_int_fd<uint32_t>(fd_.get(), kMagic);
     util::write_int_fd<uint32_t>(fd_.get(), kVersion);
-    if(fsync(fd_.get()) != 0) {
+    if (fsync(fd_.get()) != 0) {
         throw std::runtime_error("failed to fsync WAL header: " + std::string(strerror(errno)));
     }
 }
@@ -166,7 +165,7 @@ void WriteAheadLog::replay(
 void WriteAheadLog::sync() {
     std::lock_guard lock(mutex_);
     // fsync forces data from OS kernel buffer to physical disk
-    if(fsync(fd_.get()) != 0) {
+    if (fsync(fd_.get()) != 0) {
         throw std::runtime_error("failed to fsync WAL: " + std::string(strerror(errno)));
     }
 }

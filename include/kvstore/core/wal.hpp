@@ -9,8 +9,8 @@
 #include <string>
 #include <string_view>
 
-#include "kvstore/util/types.hpp"
 #include "kvstore/util/fd_guard.hpp"
+#include "kvstore/util/types.hpp"
 
 namespace kvstore::core {
 
