@@ -393,8 +393,7 @@ class Server::Impl {
 
     uint16_t actual_port_{0};
     std::atomic<int> server_fd_{-1};
-    // server_fd_ needs to be atomic bc it gets written by main thread in stop()
-    // while its read in accept_loop() by another thread.
+    // server_fd_ needs to be atomic: read by event thread while main thread can call stop() - concurrent access
     std::atomic<bool> running_{false};
 
     // thread-per-client model replaced with EventLoop + connections map
