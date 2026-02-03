@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "kvstore/util/types.hpp"
+#include "kvstore/util/fd_guard.hpp"
 
 namespace kvstore::core {
 
@@ -68,7 +69,7 @@ class WriteAheadLog {
     static constexpr uint32_t kVersion = 1;
 
     std::filesystem::path path_;
-    int fd_ = -1;
+    util::FdGuard fd_;
     mutable std::mutex mutex_;
 };
 

@@ -17,11 +17,7 @@ Connection::Connection(int fd, const ProtocolLimits& limits) : fd_(fd), limits_(
     write_buffer_.reserve(4096);
 }
 
-Connection::~Connection() {
-    if (fd_ >= 0) {
-        close(fd_);
-    }
-}
+Connection::~Connection() = default;  // FdGuard handles fd cleanup
 
 /*
 Blocking (default):
@@ -51,7 +47,7 @@ bool Connection::set_nonblocking(int fd) {
 
 IoResult Connection::do_read() {
     uint8_t buf[4096];
-    ssize_t n = recv(fd_, buf, sizeof(buf), 0);
+    ssize_t n = recv(fd_.get(), buf, sizeof(buf), 0);
 
     if (n > 0) {
         // check size limit before appending
@@ -78,7 +74,7 @@ IoResult Connection::do_write() {
     }
 
     // send from offset position (skip already-sent data)
-    ssize_t n = send(fd_, write_buffer_.data() + write_offset_, pending, MSG_NOSIGNAL);
+    ssize_t n = send(fd_.get(), write_buffer_.data() + write_offset_, pending, MSG_NOSIGNAL);
 
     if (n > 0) {
         write_offset_ += n;

@@ -12,25 +12,21 @@ namespace kvstore::net::server {
 EventLoop::EventLoop() {
 #ifdef __linux__
     // EPOLL_CLOEXEC: close epoll fd on exec() - prevents leaking fd to child processes
-    event_fd_ = epoll_create1(EPOLL_CLOEXEC);
-    if (event_fd_ < 0) {
+    event_fd_.reset(epoll_create1(EPOLL_CLOEXEC));
+    if (event_fd_.get() < 0) {
         throw std::runtime_error("failed to create epoll instance");
     }
 #elif defined(__APPLE__) || defined(__FreeBSD__)
-    event_fd_ = kqueue();
-    if (event_fd_ < 0) {
+    event_fd_.reset(kqueue());
+    if (event_fd_.get() < 0) {
         throw std::runtime_error("failed to create kqueue instance");
     }
     // Set close-on-exec flag manually for kqueue
-    fcntl(event_fd_, F_SETFD, FD_CLOEXEC);
+    fcntl(event_fd_.get(), F_SETFD, FD_CLOEXEC);
 #endif
 }
 
-EventLoop::~EventLoop() {
-    if (event_fd_ >= 0) {
-        close(event_fd_);
-    }
-}
+EventLoop::~EventLoop() = default;  // FdGuard handles fd cleanup
 
 void EventLoop::add(int fd, uint32_t events, Callback callback) {
 #ifdef __linux__
@@ -38,7 +34,7 @@ void EventLoop::add(int fd, uint32_t events, Callback callback) {
     ev.events = events;
     ev.data.fd = fd;
 
-    if (epoll_ctl(event_fd_, EPOLL_CTL_ADD, fd, &ev) < 0) {
+    if (epoll_ctl(event_fd_.get(), EPOLL_CTL_ADD, fd, &ev) < 0) {
         throw std::runtime_error("epoll_ctl ADD failed");
     }
 #elif defined(__APPLE__) || defined(__FreeBSD__)
@@ -53,7 +49,7 @@ void EventLoop::add(int fd, uint32_t events, Callback callback) {
     }
 
     if (nchanges > 0) {
-        if (kevent(event_fd_, changes, nchanges, nullptr, 0, nullptr) < 0) {
+        if (kevent(event_fd_.get(), changes, nchanges, nullptr, 0, nullptr) < 0) {
             throw std::runtime_error("kevent ADD failed");
         }
     }
@@ -69,7 +65,7 @@ void EventLoop::modify(int fd, uint32_t events) {
     ev.events = events;
     ev.data.fd = fd;
 
-    if (epoll_ctl(event_fd_, EPOLL_CTL_MOD, fd, &ev) < 0) {
+    if (epoll_ctl(event_fd_.get(), EPOLL_CTL_MOD, fd, &ev) < 0) {
         throw std::runtime_error("epoll_ctl MOD failed");
     }
 #elif defined(__APPLE__) || defined(__FreeBSD__)
@@ -94,7 +90,7 @@ void EventLoop::modify(int fd, uint32_t events) {
     }
 
     if (nchanges > 0) {
-        if (kevent(event_fd_, changes, nchanges, nullptr, 0, nullptr) < 0) {
+        if (kevent(event_fd_.get(), changes, nchanges, nullptr, 0, nullptr) < 0) {
             throw std::runtime_error("kevent MOD failed");
         }
     }
@@ -107,13 +103,13 @@ void EventLoop::remove(int fd) {
     // EPOLL_CTL_DEL ignores the event parameter (can be nullptr in newer kernels)
     // but older kernels require non-null so we pass dummy
     epoll_event ev{};
-    epoll_ctl(event_fd_, EPOLL_CTL_DEL, fd, &ev);  // ignore errors (fd might already be closed)
+    epoll_ctl(event_fd_.get(), EPOLL_CTL_DEL, fd, &ev);  // ignore errors (fd might already be closed)
 #elif defined(__APPLE__) || defined(__FreeBSD__)
     // Remove both read and write filters (ignore errors - fd might already be closed)
     struct kevent changes[2];
     EV_SET(&changes[0], fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
     EV_SET(&changes[1], fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
-    kevent(event_fd_, changes, 2, nullptr, 0, nullptr);
+    kevent(event_fd_.get(), changes, 2, nullptr, 0, nullptr);
     fd_events_.erase(fd);
 #endif
 
@@ -137,7 +133,7 @@ int EventLoop::poll(int timeout_ms) {
 #ifdef __linux__
     epoll_event events[kMaxEvents];
 
-    int n = epoll_wait(event_fd_, events, kMaxEvents, timeout_ms);
+    int n = epoll_wait(event_fd_.get(), events, kMaxEvents, timeout_ms);
     if (n < 0) {
         if (errno == EINTR) {
             return 0;  // interrupted by signal, not error
@@ -176,7 +172,7 @@ int EventLoop::poll(int timeout_ms) {
         ts_ptr = &ts;
     }
 
-    int n = kevent(event_fd_, nullptr, 0, events, kMaxEvents, ts_ptr);
+    int n = kevent(event_fd_.get(), nullptr, 0, events, kMaxEvents, ts_ptr);
     if (n < 0) {
         if (errno == EINTR) {
             return 0;  // interrupted by signal, not error

@@ -14,6 +14,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "kvstore/util/fd_guard.hpp"
+
 // Portable event flags (map to epoll/kqueue equivalents)
 namespace kvstore::net::server {
 #ifdef __linux__
@@ -90,7 +92,7 @@ class EventLoop {
 
     static constexpr int kMaxEvents = 64;
 
-    int event_fd_{-1};  // epoll fd on Linux, kqueue fd on macOS/BSD
+    util::FdGuard event_fd_;  // epoll fd on Linux, kqueue fd on macOS/BSD
     std::atomic<bool> running_{false};
     std::unordered_map<int, Callback> callbacks_;
 #if defined(__APPLE__) || defined(__FreeBSD__)
