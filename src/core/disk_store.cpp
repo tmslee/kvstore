@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "kvstore/util/binary_io.hpp"
+#include "kvstore/util/logger.hpp"
 
 namespace kvstore::core {
 
@@ -213,6 +214,10 @@ class DiskStore::Impl {
         off_t file_size = lseek(fd_, 0, SEEK_END);
         lseek(fd_, 8, SEEK_SET);  // skip header (magic + version = 8 bytes)
 
+        size_t entries_loaded = 0;
+        size_t entries_corrupted = 0;
+        uint64_t last_good_offset = 8;
+
         // read every entry
         while (lseek(fd_, 0, SEEK_CUR) < file_size) {
             // keep current offset
@@ -221,18 +226,26 @@ class DiskStore::Impl {
             // fetch type, key, value, expiration time
             uint8_t entry_type;
             if (!util::read_int_fd<uint8_t>(fd_, entry_type)) {
+                LOG_WARN("Corrupted entry at offset " + std::to_string(offset) + ": failed to read entry type");
+                ++entries_corrupted;
                 break;
             }
             std::string key;
             if (!util::read_string_fd(fd_, key)) {
+                LOG_WARN("Corrupted entry at offset " + std::to_string(offset) + ": failed to read key");
+                ++entries_corrupted;
                 break;
             }
             std::string value;
             if (!util::read_string_fd(fd_, value)) {
+                LOG_WARN("Corrupted entry at offset " + std::to_string(offset) + ": failed to read value");
+                ++entries_corrupted;
                 break;
             }
             uint8_t has_expiration;
             if (!util::read_int_fd<uint8_t>(fd_, has_expiration)) {
+                LOG_WARN("Corrupted entry at offset " + std::to_string(offset) + ": failed to read expiration flag");
+                ++entries_corrupted;
                 break;
             }
 
@@ -240,6 +253,8 @@ class DiskStore::Impl {
             if (has_expiration != 0) {
                 uint64_t expires_at_ms;
                 if (!util::read_int_fd<uint64_t>(fd_, expires_at_ms)) {
+                    LOG_WARN("Corrupted entry at offset " + std::to_string(offset) + ": failed to read expiration time");
+                    ++entries_corrupted;
                     break;
                 }
                 expires_at = util::from_epoch_ms(expires_at_ms);
@@ -264,7 +279,18 @@ class DiskStore::Impl {
                     ++entry_count_;
                 }
             }
+
+            ++entries_loaded;
+            last_good_offset = lseek(fd_, 0, SEEK_CUR);
         }
+
+        //log summary
+        LOG_INFO("Index loaded: " + std::to_string(entries_loaded) + " entries, " + std::to_string(tombstone_count_) + " tombstones");
+
+        if(entries_corrupted > 0 || last_good_offset < static_cast<uint64_t>(file_size)) {
+            LOG_WARN("Data file may be corrupted - loaded " + std::to_string(entries_loaded) + " entries, stopped at offset " + std::to_string(last_good_offset) + " of " + std::to_string(file_size) + " bytes");
+        }
+        
     }
 
     void append_entry(std::string_view key, std::string_view value,
