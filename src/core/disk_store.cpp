@@ -484,6 +484,8 @@ class DiskStore::Impl {
             if(fsync(dir_fd.get()) != 0) {
                 LOG_WARN("failed to fsync directory after compaction rename: " + std::string(strerror(errno)));
             }
+        } else {
+            LOG_WARN("failed to open directory for fsync after compaction rename: " + std::string(strerror(errno)));
         }
 
         // reopen the data file

@@ -76,6 +76,8 @@ void Snapshot::save(const EntryIterator& iterate) {
         if (fsync(dir_guard.get()) != 0) {
             LOG_WARN("failed to fsync directory after snapshot rename: " + std::string(strerror(errno)));
         }
+    } else {
+        LOG_WARN("failed to open directory for fsync after snapshot rename: " + std::string(strerror(errno)));
     }
 }
 
