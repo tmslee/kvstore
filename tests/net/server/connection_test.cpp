@@ -51,7 +51,7 @@ TEST_F(ConnectionTest, DoReadData) {
     fds_[0] = -1;
 
     const char* msg = "hello";
-    write(fds_[1], msg, 5);
+    [[maybe_unused]] auto ignored = write(fds_[1], msg, 5);
 
     IoResult result = conn.do_read();
     EXPECT_EQ(result, IoResult::Ok);
@@ -114,7 +114,7 @@ TEST_F(ConnectionTest, TryParseTextRequest) {
     fds_[0] = -1;
 
     const char* msg = "GET mykey\r\n";
-    write(fds_[1], msg, strlen(msg));
+    [[maybe_unused]] auto ignored = write(fds_[1], msg, strlen(msg));
 
     conn.do_read();
     auto req = conn.try_parse_request();
@@ -129,13 +129,13 @@ TEST_F(ConnectionTest, TryParsePartialRequest) {
     fds_[0] = -1;
 
     const char* msg = "GET mykey";
-    write(fds_[1], msg, strlen(msg));
+    [[maybe_unused]] auto ignored1 = write(fds_[1], msg, strlen(msg));
 
     conn.do_read();
     auto req = conn.try_parse_request();
     EXPECT_FALSE(req.has_value());
 
-    write(fds_[1], "\r\n", 2);
+    [[maybe_unused]] auto ignored2 = write(fds_[1], "\r\n", 2);
     conn.do_read();
     req = conn.try_parse_request();
 

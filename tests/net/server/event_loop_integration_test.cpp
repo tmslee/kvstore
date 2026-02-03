@@ -166,7 +166,7 @@ TEST_F(EventLoopIntegrationTest, EchoServer) {
         int fd = connect_client();
 
         const char* msg = "GET hello\r\n";
-        write(fd, msg, strlen(msg));
+        [[maybe_unused]] auto ignored = write(fd, msg, strlen(msg));
 
         char buf[256];
         ssize_t n = read(fd, buf, sizeof(buf) - 1);
@@ -240,9 +240,9 @@ TEST_F(EventLoopIntegrationTest, MultipleClients) {
         clients.emplace_back([this, i]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(50 + i * 10));
             int fd = connect_client();
-            write(fd, "PING\r\n", 6);
+            [[maybe_unused]] auto ignored1 = write(fd, "PING\r\n", 6);
             char buf[64];
-            read(fd, buf, sizeof(buf));
+            [[maybe_unused]] auto ignored2 = read(fd, buf, sizeof(buf));
             close(fd);
         });
     }
