@@ -85,7 +85,8 @@ IoResult Connection::do_write() {
         }
         return IoResult::Ok;
     } else if (n == 0) {
-        return IoResult::Closed;
+        // send() returning 0 with pending data is rare - treat as WouldBlock and retry
+        return IoResult::WouldBlock;
     } else {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return IoResult::WouldBlock;
