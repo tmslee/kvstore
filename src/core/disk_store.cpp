@@ -146,11 +146,14 @@ class DiskStore::Impl {
     void clear() {
         std::unique_lock lock(mutex_);
 
-        // reopen with O_TRUNC to delete all content (reset closes existing fd first)
-        fd_.reset(open(data_path_.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644));
-        if (!fd_) {
+        // Open new fd first before closing old one to maintain valid state on failure
+        int new_fd = open(data_path_.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+        if (new_fd < 0) {
             throw std::runtime_error("failed to clear data file: " + data_path_.string());
         }
+
+        // Only replace after successful open
+        fd_.reset(new_fd);
 
         util::write_int_fd<uint32_t>(fd_.get(), kMagic);
         util::write_int_fd<uint32_t>(fd_.get(), kVersion);

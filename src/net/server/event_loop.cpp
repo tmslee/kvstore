@@ -69,7 +69,11 @@ void EventLoop::modify(int fd, uint32_t events) {
         throw std::runtime_error("epoll_ctl MOD failed");
     }
 #elif defined(__APPLE__) || defined(__FreeBSD__)
-    uint32_t old_events = fd_events_[fd];
+    auto it = fd_events_.find(fd);
+    if (it == fd_events_.end()) {
+        throw std::runtime_error("kevent MOD failed: fd not registered");
+    }
+    uint32_t old_events = it->second;
     struct kevent changes[4];
     int nchanges = 0;
 
