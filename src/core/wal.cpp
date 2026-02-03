@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include <stdexcept>
+#include <cstring>
 
 #include "kvstore/util/binary_io.hpp"
 
@@ -150,7 +151,7 @@ void WriteAheadLog::replay(
 
     int read_fd = open(path_.c_str(), O_RDONLY);
     if (read_fd < 0) {
-        return;
+        throw std::runtime_error("Failed to open WAL for replay: " + std::string(strerror(errno)));
     }
 
     if (!validate_header(read_fd)) {

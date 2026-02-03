@@ -227,13 +227,15 @@ class Server::Impl {
 
         // make non-blocking and create connection
         Connection::set_nonblocking(client_fd);
+        std::unique_ptr<Connection> conn;
         try {
-            connections_[client_fd] = std::make_unique<Connection>(client_fd, limits_);
+            conn = std::make_unique<Connection>(client_fd, limits_);
         } catch (...) {
-            // if connection creation fails, close fd to prevent leak
-            close(client_fd);
-            throw;
+            close(client_fd);  // Connection doesn't exist, we must close
+            LOG_ERROR("Failed to create connection");
+            return;
         }
+        connections_[client_fd] = std::move(conn);
 
         LOG_DEBUG("Client connected, fd=" + std::to_string(client_fd));
 
