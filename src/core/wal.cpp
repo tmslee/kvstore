@@ -174,11 +174,14 @@ void WriteAheadLog::sync() {
 void WriteAheadLog::truncate() {
     std::lock_guard lock(mutex_);
 
-    // reopen with O_TRUNC to delete all content (reset closes existing fd first)
-    fd_.reset(open(path_.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644));
-    if (!fd_) {
+    // Open new fd first before closing old one to maintain valid state on failure
+    int new_fd = open(path_.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (new_fd < 0) {
         throw std::runtime_error("failed to truncate WAL file: " + path_.string());
     }
+
+    // Only replace after successful open
+    fd_.reset(new_fd);
 
     write_header();
 }
