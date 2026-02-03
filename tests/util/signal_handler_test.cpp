@@ -27,7 +27,10 @@ TEST_F(SignalHandlerTest, RequestShutdown) {
 TEST_F(SignalHandlerTest, HandlesSIGINT) {
     std::thread waiter([] { SignalHandler::wait_for_shutdown(); });
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    // wait for waiter thread to actually be waiting (deterministic, no fixed sleep)
+    while (!SignalHandler::waiting()) {
+        std::this_thread::yield();
+    }
     EXPECT_FALSE(SignalHandler::should_shutdown());
 
     raise(SIGINT);
@@ -41,7 +44,10 @@ TEST_F(SignalHandlerTest, HandlesSIGTERM) {
 
     std::thread waiter([] { SignalHandler::wait_for_shutdown(); });
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    // wait for waiter thread to actually be waiting (deterministic, no fixed sleep)
+    while (!SignalHandler::waiting()) {
+        std::this_thread::yield();
+    }
     EXPECT_FALSE(SignalHandler::should_shutdown());
 
     raise(SIGTERM);

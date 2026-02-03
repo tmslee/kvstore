@@ -7,6 +7,7 @@
 namespace kvstore::util {
 
 std::atomic<bool> SignalHandler::shutdown_requested_{false};
+std::atomic<int> SignalHandler::waiting_count_{0};
 
 namespace {
 
@@ -31,7 +32,13 @@ bool SignalHandler::should_shutdown() {
 
 void SignalHandler::wait_for_shutdown() {
     std::unique_lock lock(shutdown_mutex);
+    ++waiting_count_;
     shutdown_cv.wait(lock, [] { return shutdown_requested_.load(); });
+    --waiting_count_;
+}
+
+bool SignalHandler::waiting() {
+    return waiting_count_.load() > 0;
 }
 
 void SignalHandler::request_shutdown() {
@@ -41,6 +48,7 @@ void SignalHandler::request_shutdown() {
 
 void SignalHandler::reset() {
     shutdown_requested_.store(false);
+    waiting_count_.store(0);
 }
 
 }  // namespace kvstore::util
