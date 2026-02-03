@@ -135,7 +135,7 @@ std::optional<Request> Connection::try_parse_request() {
     } else {
         // text protocol: look for newline (search from offset)
         auto start = read_buffer_.begin() + read_offset_;
-        auto it = std::find(start, read_buffer_.end(), '\n');
+        auto it = std::find(start, read_buffer_.end(), static_cast<unsigned char>('\n'));
         if (it == read_buffer_.end()) {
             return std::nullopt;
         }
