@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <cstring>
 #include <stdexcept>
 
 #include "kvstore/net/client/protocol_handler.hpp"
@@ -30,7 +31,7 @@ class Client::Impl {
 
         int fd = socket(AF_INET, SOCK_STREAM, 0);
         if (fd < 0) {
-            throw std::runtime_error("failed to create socket");
+            throw std::runtime_error("failed to create socket: " + std::string(strerror(errno)));
         }
 
         // Set close-on-exec to prevent fd leak to child processes
@@ -56,9 +57,10 @@ class Client::Impl {
         }
 
         if (::connect(socket_fd_.get(), reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+            std::string err = strerror(errno);  // capture before reset() might change errno
             socket_fd_.reset();
             throw std::runtime_error("failed to connect to " + options_.host + ":" +
-                                     std::to_string(options_.port));
+                                     std::to_string(options_.port) + ": " + err);
         }
     }
 
