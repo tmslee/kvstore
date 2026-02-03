@@ -106,10 +106,28 @@ target_link_libraries(binary_protocol_test
         GTest::gtest_main
 )
 
-add_executable(protocol_handler_test
-    net/protocol_handler_test.cpp
+add_executable(event_loop_test
+    net/server/event_loop_test.cpp
 )
-target_link_libraries(protocol_handler_test
+target_link_libraries(event_loop_test
+    PRIVATE
+        kvstore
+        GTest::gtest_main
+)
+
+add_executable(connection_test
+    net/server/connection_test.cpp
+)
+target_link_libraries(connection_test
+    PRIVATE
+        kvstore
+        GTest::gtest_main
+)
+
+add_executable(event_loop_integration_test
+    net/server/event_loop_integration_test.cpp
+)
+target_link_libraries(event_loop_integration_test
     PRIVATE
         kvstore
         GTest::gtest_main
@@ -129,7 +147,9 @@ if(ENABLE_ASAN OR ENABLE_TSAN OR ENABLE_UBSAN)
     add_test(NAME logger_test COMMAND logger_test)
     add_test(NAME config_test COMMAND config_test)
     add_test(NAME binary_protocol_test COMMAND binary_protocol_test)
-    add_test(NAME protocol_handler_test COMMAND protocol_handler_test)
+    add_test(NAME event_loop_test COMMAND event_loop_test)
+    add_test(NAME connection_test COMMAND connection_test)
+    add_test(NAME event_loop_integration_test COMMAND event_loop_integration_test)
 else()
     # Normal builds: use discovery for better CTest integration
     include(GoogleTest)
@@ -145,5 +165,7 @@ else()
     gtest_discover_tests(logger_test)
     gtest_discover_tests(config_test)
     gtest_discover_tests(binary_protocol_test)
-    gtest_discover_tests(protocol_handler_test)
+    gtest_discover_tests(event_loop_test)
+    gtest_discover_tests(connection_test)
+    gtest_discover_tests(event_loop_integration_test)
 endif()

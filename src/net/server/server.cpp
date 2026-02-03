@@ -8,12 +8,12 @@
 
 #include <atomic>
 #include <cstring>
-#include <iostream>
-#include <mutex>
 #include <stdexcept>
 #include <thread>
 #include <vector>
 
+#include "kvstore/net/server/connection.hpp"
+#include "kvstore/net/server/event_loop.hpp"
 #include "kvstore/net/server/protocol_handler.hpp"
 #include "kvstore/util/logger.hpp"
 #include "kvstore/util/types.hpp"
@@ -30,7 +30,7 @@ namespace {
    -> default behavior: terminate the process 2 ways to handle:
     1. signal(SIGPIPE, SIG_IGN) -> ignore globally, send() returns -1 with errno = EPIPE
     2. MSG_NOSIGNAL flag on each send() call - same effect, per call
-    - we do both for afety
+    - we do both for safety
 */
 struct SigpipeIgnorer {
     SigpipeIgnorer() {
@@ -72,9 +72,9 @@ class Server::Impl {
             5. mark for listen
             6. spawn thread to accept connections
         */
-        if (running_) {
+        if (running_)
             return;
-        }
+
         // AF_INET = IPv4, SOCK_STREAM = TCP
         // socket sctor returns a file descriptor (integer handle)
         // negative means error
@@ -137,10 +137,15 @@ class Server::Impl {
             throw std::runtime_error("failed to listen: " + std::string(strerror(errno)));
         }
 
-        // set running flag, spawn thread to accept connections
+        // make server sockt non-blocking
+        Connection::set_nonblocking(fd);
+
+        // set running flag
         server_fd_.store(fd);
         running_ = true;
-        accept_thread_ = std::thread(&Impl::accept_loop, this);
+
+        // run event loop in a thread instead of accept loop
+        event_thread_ = std::thread(&Impl::event_loop_run, this);
 
         // start cleanup thread if enabled
         if (options_.cleanup_interval_ms > 0) {
@@ -153,11 +158,13 @@ class Server::Impl {
     void stop() {
         // exchange sets the value as argument and returns old value
         // if already stopped, return early.
-        if (!running_.exchange(false)) {
+        if (!running_.exchange(false))
             return;
-        }
 
         LOG_INFO("Server stopping...");
+
+        // stop event loop (thread-safe)
+        loop_.stop();
 
         int fd = server_fd_.exchange(-1);
         // shutdown stops reads and writes, unblocking any threads stuck in accept()
@@ -168,8 +175,8 @@ class Server::Impl {
         }
 
         // wait for accept thread to finish
-        if (accept_thread_.joinable()) {
-            accept_thread_.join();  // noexcept
+        if (event_thread_.joinable()) {
+            event_thread_.join();  // noexcept
         }
 
         // wait for cleanup thread to finish
@@ -177,15 +184,8 @@ class Server::Impl {
             cleanup_thread_.join();  // noexcept
         }
 
-        // wait for all client handler threds to finish, then clear vector.
-        std::lock_guard lock(clients_mutex_);  // can throw std::system_error
-        for (auto& info : clients_) {
-            if (info->thread.joinable()) {
-                info->thread.join();  // noexcept
-            }
-        }
-        clients_.clear();
-        // std::lock_guard ctor can technically throw. rare but possible.
+        // close all client connections
+        connections_.clear();
 
         LOG_INFO("Server stopped");
     }
@@ -199,91 +199,179 @@ class Server::Impl {
     }
 
    private:
-    struct ClientInfo {
-        std::thread thread;
-        std::atomic<bool> finished{false};
-    };
+    void event_loop_run() {
+        // add server socket to watch for incoming connecitons
+        loop_.add(server_fd_.load(), kEventRead, [this](int, uint32_t) { handle_accept(); });
+        loop_.run();
+    }
 
-    void accept_loop() {
-        while (running_) {
-            // clean up finished client threads periodically
-            cleanup_finished_clients();
+    void handle_accept() {
+        sockaddr_in client_addr{};
+        socklen_t client_len = sizeof(client_addr);
 
-            // check connection limit
-            {
-                std::lock_guard lock(clients_mutex_);
-                if (clients_.size() >= options_.max_connections) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    continue;
+        int client_fd =
+            accept(server_fd_.load(), reinterpret_cast<sockaddr*>(&client_addr), &client_len);
+        if (client_fd < 0) {
+            if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                LOG_ERROR("Accept failed: " + std::string(strerror(errno)));
+            }
+            return;
+        }
+
+        // check connection limit
+        if (connections_.size() >= options_.max_connections) {
+            LOG_WARN("Max connections reached, rejecting client");
+            close(client_fd);
+            return;
+        }
+
+        // make non-blocking and create connection
+        Connection::set_nonblocking(client_fd);
+        std::unique_ptr<Connection> conn;
+        try {
+            conn = std::make_unique<Connection>(client_fd, limits_);
+        } catch (...) {
+            close(client_fd);  // Connection doesn't exist, we must close
+            LOG_ERROR("Failed to create connection");
+            return;
+        }
+        connections_[client_fd] = std::move(conn);
+
+        LOG_DEBUG("Client connected, fd=" + std::to_string(client_fd));
+
+        // add to event loop, watch for reads
+        loop_.add(client_fd, kEventRead,
+                  [this, client_fd](int, uint32_t events) { handle_client(client_fd, events); });
+    }
+
+    /*
+        note: in handle client we add kEventWrite only after processing a request.
+        if socket was already writable we wont know until next epoll_wait() call
+        latency is at most 1 poll iteration (100ms timeout) this is okay for most cases
+
+        for high throughput scenarios you could: try writing imeediately after queueing response
+        and only watch kEventWrite if theres still data left
+        or use edge-triggered mode (EPOLLET) which requires more careful handling
+    */
+
+    void handle_client(int client_fd, uint32_t events) {
+        auto it = connections_.find(client_fd);
+        if (it == connections_.end())
+            return;
+
+        auto& conn = it->second;
+
+        // errors/hangups
+        if (events & (kEventError | kEventHangup)) {
+            if (events & kEventError) {
+                LOG_DEBUG("Client error, fd=" + std::to_string(client_fd));
+            } else {
+                LOG_DEBUG("Client hangup, fd=" + std::to_string(client_fd));
+            }
+            close_client(client_fd);
+            return;
+        }
+
+        // handle readable (incoming data)
+        if (events & kEventRead) {
+            auto result = conn->do_read();
+            if (result == IoResult::Closed || result == IoResult::Error) {
+                close_client(client_fd);
+                return;
+            }
+
+            // try to parse & process requests
+            while (auto req = conn->try_parse_request()) {
+                Response response;
+                try {
+                    response = process_request(*req);
+                } catch (const std::exception& e) {
+                    response = Response::error(std::string("internal error: ") + e.what());
+                }
+
+                conn->queue_response(response);
+
+                if (response.close_connection) {
+                    // flush response then close
+                    conn->do_write();
+                    close_client(client_fd);
+                    return;
                 }
             }
 
-            sockaddr_in client_addr{};
-            socklen_t client_len = sizeof(client_addr);
+            // if we have data to send, watch for writability
+            if (conn->has_pending_write()) {
+                loop_.modify(client_fd, kEventRead | kEventWrite);
+            }
+        }
 
-            int fd = server_fd_.load();
-            if (fd < 0) {
-                break;
+        // handle writable (can send data)
+        if (events & kEventWrite) {
+            auto result = conn->do_write();
+            if (result == IoResult::Error) {
+                close_client(client_fd);
+                return;
             }
 
-            int client_fd =
-                accept(server_fd_, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
-
-            if (client_fd < 0) {
-                if (running_ && errno != EINTR) {  // retry if we're still running
-                    LOG_ERROR("Accept failed: " + std::string(strerror(errno)));
-                }
-                continue;
-            }
-
-            // set client socket timeout
-            if (options_.client_timeout_seconds > 0) {
-                struct timeval tv;
-                tv.tv_sec = options_.client_timeout_seconds;
-                tv.tv_usec = 0;
-                setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-                setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-            }
-
-            LOG_DEBUG("Client connected, fd=" + std::to_string(client_fd));
-
-            {
-                std::lock_guard lock(clients_mutex_);
-                auto info = std::make_unique<ClientInfo>();
-                auto* info_ptr = info.get();
-                /*
-                    IMPORTANT NOTE:
-                    - std::thread copies arguments by default!
-                    - if we pass ClientInfo by value, bceause it contains std::thread (not copyable)
-                   this will not work
-                    - if we pass ClientInfo by reference, it will work but we need std::ref()
-                        i.e. std::thread(&Impl::handle_client, this, client_fd,
-                   std::ref(*info_ptr));
-                        - this is fine but gotta rmb + error msgs are confusing
-                    - if we just pass by pointer, this is simple & explicit
-                */
-
-                // we pass 'this' to thread because handle_client is a member function.
-                // member functions have an implicit this paramter:
-                //      - void handle_client(Impl* this, int fd, ClientInfo* info);
-                info->thread = std::thread(&Impl::handle_client, this, client_fd, info_ptr);
-                clients_.push_back(std::move(info));
+            // if nothing left to write, stop watching kEventWrite
+            if (!conn->has_pending_write()) {
+                loop_.modify(client_fd, kEventRead);
             }
         }
     }
 
-    void cleanup_finished_clients() {
-        std::lock_guard lock(clients_mutex_);
-        auto it = clients_.begin();
-        while (it != clients_.end()) {
-            if ((*it)->finished.load()) {
-                if ((*it)->thread.joinable()) {
-                    (*it)->thread.join();
-                }
-                it = clients_.erase(it);
-            } else {
-                ++it;
+    void close_client(int client_fd) {
+        LOG_DEBUG("Client disconnected, fd=" + std::to_string(client_fd));
+        loop_.remove(client_fd);
+        connections_.erase(client_fd);
+    }
+
+    Response process_request(const Request& req) {
+        switch (req.command) {
+            case Command::Get: {
+                if (req.key.empty())
+                    return Response::error("usage: GET key");
+                auto result = store_.get(req.key);
+                if (result.has_value())
+                    return Response::ok(*result);
+                return Response::not_found();
             }
+            case Command::Put: {
+                if (req.key.empty())
+                    return Response::error("usage: PUT key value");
+                store_.put(req.key, req.value);
+                return Response::ok();
+            }
+            case Command::PutEx: {
+                if (req.key.empty())
+                    return Response::error("usage: PUTEX key ms value");
+                store_.put(req.key, req.value, util::Duration(req.ttl_ms));
+                return Response::ok();
+            }
+            case Command::Del: {
+                if (req.key.empty())
+                    return Response::error("usage: DEL key");
+                if (store_.remove(req.key))
+                    return Response::ok();
+                return Response::not_found();
+            }
+            case Command::Exists: {
+                if (req.key.empty())
+                    return Response::error("usage: EXISTS key");
+                return Response::ok(store_.contains(req.key) ? "1" : "0");
+            }
+            case Command::Size:
+                return Response::ok(std::to_string(store_.size()));
+            case Command::Clear:
+                store_.clear();
+                return Response::ok();
+            case Command::Ping:
+                return Response::ok("PONG");
+            case Command::Quit:
+                return Response::bye();
+            case Command::Unknown:
+            default:
+                return Response::error("unknown command");
         }
     }
 
@@ -299,130 +387,21 @@ class Server::Impl {
             }
         }
     }
-
-    void handle_client(int client_fd, ClientInfo* info) {
-        try {
-            auto handler = create_protocol_handler(client_fd, options_.binary_only, limits_);
-            if (!handler) {
-                close(client_fd);
-                info->finished.store(true);
-                return;
-            }
-            // note: running_ is atomic<bool>. when you use atomic in a boolean context, it
-            // implicitly calls load()
-            while (running_) {
-                auto request = handler->read_request(client_fd);
-                if (!request) {
-                    break;
-                }
-                Response response;
-                try {
-                    response = process_request(*request);
-                } catch (const std::exception& e) {
-                    response = Response::error(std::string("internal error: ") + e.what());
-                } catch (...) {
-                    response = Response::error("internal error");
-                }
-
-                if (!handler->write_response(client_fd, response) || response.close_connection) {
-                    break;
-                }
-            }
-        } catch (const std::exception& e) {
-            LOG_ERROR("Client handle error: " + std::string(e.what()));
-        } catch (...) {
-            LOG_ERROR("Client handler unkown error");
-        }
-
-        close(client_fd);
-        info->finished.store(true);
-        LOG_DEBUG("Client disconnected, fd=" + std::to_string(client_fd));
-    }
-
-    Response process_request(const Request& req) {
-        switch (req.command) {
-            case Command::Get: {
-                if (req.key.empty()) {
-                    return Response::error("usage: GET key");
-                }
-                auto result = store_.get(req.key);
-                if (result.has_value()) {
-                    return Response::ok(*result);
-                }
-                return Response::not_found();
-            }
-
-            case Command::Put: {
-                if (req.key.empty()) {
-                    return Response::error("usage: PUT key value");
-                }
-                store_.put(req.key, req.value);
-                return Response::ok();
-            }
-
-            case Command::PutEx: {
-                if (req.key.empty()) {
-                    return Response::error("usage: PUTEX key ms value");
-                }
-                store_.put(req.key, req.value, util::Duration(req.ttl_ms));
-                return Response::ok();
-            }
-
-            case Command::Del: {
-                if (req.key.empty()) {
-                    return Response::error("usage: DEL key");
-                }
-                if (store_.remove(req.key)) {
-                    return Response::ok();
-                }
-                return Response::not_found();
-            }
-
-            case Command::Exists: {
-                if (req.key.empty()) {
-                    return Response::error("usage: EXISTS key");
-                }
-                return Response::ok(store_.contains(req.key) ? "1" : "0");
-            }
-
-            case Command::Size:
-                return Response::ok(std::to_string(store_.size()));
-
-            case Command::Clear:
-                store_.clear();
-                return Response::ok();
-
-            case Command::Ping:
-                return Response::ok("PONG");
-
-            case Command::Quit:
-                return Response::bye();
-
-            case Command::Unknown:
-            default:
-                return Response::error("unknown command");
-        }
-    }
-
     core::IStore& store_;
     ServerOptions options_;
     ProtocolLimits limits_;
 
     uint16_t actual_port_{0};
-
     std::atomic<int> server_fd_{-1};
     // server_fd_ needs to be atomic bc it gets written by main thread in stop()
     // while its read in accept_loop() by another thread.
     std::atomic<bool> running_{false};
 
-    std::thread accept_thread_;
+    // thread-per-client model replaced with EventLoop + connections map
+    EventLoop loop_;
+    std::unordered_map<int, std::unique_ptr<Connection>> connections_;
     std::thread cleanup_thread_;
-
-    // important note: we use std::vector<std::unique_ptr<>> bceause vector reallocation will
-    // invalidate address of stored objects. using a pointer alleviates this - heap objects have
-    // stable addresses.
-    std::vector<std::unique_ptr<ClientInfo>> clients_;
-    std::mutex clients_mutex_;
+    std::thread event_thread_;  // single thread rns event loop
 };
 
 // PIMPL INTERFACE -------------------------------------------------------------------------------
