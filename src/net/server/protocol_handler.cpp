@@ -68,7 +68,7 @@ std::optional<Request> TextProtocolHandler::read_request(int fd) {
 
     // validate key/value sizes
     if (req.key.size() > limits_.max_key_size || req.value.size() > limits_.max_value_size) {
-        return Request{Command::Unknown, "", "", 0};  // reject as unknown command
+        throw std::runtime_error("key or value too large");
     }
 
     return req;
