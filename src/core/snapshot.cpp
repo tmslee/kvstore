@@ -4,7 +4,9 @@
 #include <unistd.h>
 
 #include <stdexcept>
+#include <cstring>
 
+#include "kvstore/util/logger.hpp"
 #include "kvstore/util/binary_io.hpp"
 
 namespace kvstore::core {
@@ -70,7 +72,9 @@ void Snapshot::save(const EntryIterator& iterate) {
     }
     int dir_fd = open(dir_path.c_str(), O_RDONLY);
     if (dir_fd >= 0) {
-        fsync(dir_fd);
+        if(fsync(dir_fd) != 0) {
+            LOG_WARN("failed to fsync directory after snapshot rename: " + std::string(strerror(errno)));
+        }
         close(dir_fd);
     }
 }

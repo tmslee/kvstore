@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
+#include <cstring>
 
 #include "kvstore/util/binary_io.hpp"
 #include "kvstore/util/logger.hpp"
@@ -52,7 +53,10 @@ class DiskStore::Impl {
         if (!file_exists || std::filesystem::file_size(data_path_) == 0) {
             util::write_int_fd<uint32_t>(fd_, kMagic);
             util::write_int_fd<uint32_t>(fd_, kVersion);
-            fsync(fd_);
+            if(fsync(fd_) != 0) {
+                close(fd_);
+                throw std::runtime_error("failed to fsync data file handler: " + std::string(strerror(errno)));
+            }
         } else {
             load_index();
         }
@@ -159,7 +163,9 @@ class DiskStore::Impl {
 
         util::write_int_fd<uint32_t>(fd_, kMagic);
         util::write_int_fd<uint32_t>(fd_, kVersion);
-        fsync(fd_);
+        if(fsync(fd_) != 0) {
+            throw std::runtime_error("failed ot fsync after clear: " + std::string(strerror(errno)));
+        }
 
         index_.clear();
         tombstone_count_ = 0;
@@ -463,7 +469,13 @@ class DiskStore::Impl {
         }
 
         // fsync temp file before rename
-        fsync(temp_fd);
+        if(fsync(temp_fd) != 0) {
+            close(temp_fd);
+            close(read_fd);
+            std::filesystem::remove(temp_path);
+            throw std::runtime_error("failed to fsync compacted data file: " + std::string(strerror(errno)));
+        };
+
         close(temp_fd);
 
         // close current fd before rename
@@ -479,7 +491,9 @@ class DiskStore::Impl {
         }
         int dir_fd = open(dir_path.c_str(), O_RDONLY);
         if (dir_fd >= 0) {
-            fsync(dir_fd);
+            if(fsync(dir_fd) != 0) {
+                LOG_WARN("failed to fsync directory after compaction rename: " + std::string(strerror(errno)));
+            }
             close(dir_fd);
         }
 

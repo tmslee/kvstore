@@ -6,6 +6,7 @@
 #include <cstring>
 #include <stdexcept>
 
+#include "kvstore/util/logger.hpp"
 #include "kvstore/util/binary_io.hpp"
 
 namespace kvstore::core {
@@ -63,7 +64,9 @@ WriteAheadLog& WriteAheadLog::operator=(WriteAheadLog&& other) noexcept {
 void WriteAheadLog::write_header() {
     util::write_int_fd<uint32_t>(fd_, kMagic);
     util::write_int_fd<uint32_t>(fd_, kVersion);
-    fsync(fd_);
+    if(fsync(fd_) != 0) {
+        throw std::runtime_error("failed to fsync WAL header: " + std::string(strerror(errno)));
+    }
 }
 
 bool WriteAheadLog::validate_header(int fd) {
@@ -174,7 +177,9 @@ void WriteAheadLog::replay(
 void WriteAheadLog::sync() {
     std::lock_guard lock(mutex_);
     // fsync forces data from OS kernel buffer to physical disk
-    fsync(fd_);
+    if(fsync(fd_) != 0) {
+        throw std::runtime_error("failed to fsync WAL: " + std::string(strerror(errno)));
+    }
 }
 
 void WriteAheadLog::truncate() {
