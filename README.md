@@ -1,9 +1,9 @@
 # KVStore
-A high-performance key-value store written in C++20, featuring both in-memory and disk-based storage, TCP networking with text and binary protocols, TTL support, and comprehensive persistence.
+A key-value store written in C++20, featuring both in-memory and disk-based storage, event-driven TCP networking with text and binary protocols, TTL support, and comprehensive persistence.
 
 ## Features
 - **Multiple Storage Backends**
-  - In-memory store with `shared_mutex` for concurrent access
+  - In-memory store with `shared_mutex` for concurrent read access
   - Disk-based store with log-structured storage and compaction
 
 - **Persistence**
@@ -12,21 +12,24 @@ A high-performance key-value store written in C++20, featuring both in-memory an
   - Automatic compaction
 
 - **Networking**
-  - TCP server with thread-per-connection model
+  - Single-threaded event loop with epoll (Linux) / kqueue (macOS/BSD)
+  - Non-blocking I/O with connection buffering
   - Text protocol (human-readable, telnet-compatible)
   - Binary protocol (length-prefixed, efficient)
   - Auto-detection of protocol type
+  - TCP_NODELAY for low latency
 
 - **TTL Support**
   - Per-key expiration times
-  - Lazy expiration on access
+  - Lazy expiration on access + background cleanup
   - TTL persisted across restarts
 
 - **Production Ready**
-  - Graceful shutdown with signal handling
+  - Graceful shutdown with async-signal-safe handling
   - Configurable via file and CLI
   - Structured logging with levels
   - Connection limits and timeouts
+  - RAII resource management throughout
 
 ## Building
 ### Requirements
@@ -81,13 +84,13 @@ ctest --output-on-failure
 ### Using the CLI client
 ```bash
 # Start the client
-./kvstore_client
+./kvstore-client
 
 # With options
-./kvstore_client --host 192.168.1.100 --port 6380 --binary --timeout 60
+./kvstore-client --host 192.168.1.100 --port 6380 --binary --timeout 60
 
 # Example session
-$ ./kvstore_client
+$ ./kvstore-client
 Connected to 127.0.0.1:6379
 > PUT name Alice
 OK
@@ -343,19 +346,25 @@ Strings are length-prefixed: `[4 bytes: length][data]`
 │   │   │   └── protocol_handler.hpp
 │   │   └── server/
 │   │       ├── server.hpp      # Server class
-│   │       └── protocol_handler.hpp
+│   │       ├── protocol_handler.hpp
+│   │       ├── connection.hpp  # Per-client connection state
+│   │       └── event_loop.hpp  # Event loop (epoll/kqueue)
 │   └── util/
 │       ├── types.hpp           # Time types
 │       ├── binary_io.hpp       # Binary I/O utilities
 │       ├── clock.hpp           # Clock abstraction
 │       ├── config.hpp          # Configuration
+│       ├── fd_guard.hpp        # RAII file descriptor wrapper
 │       ├── logger.hpp          # Logging
 │       └── signal_handler.hpp  # Signal handling
 ├── src/                        # Implementation files
 ├── bin/
 │   ├── server_main.cpp         # Server executable
 │   └── client_main.cpp         # CLI client
-├── tests/                      # Unit tests
+├── tests/
+│   ├── core/                   # Store, WAL, snapshot, disk_store tests
+│   ├── net/                    # Protocol, client, server tests
+│   └── util/                   # Config, logger, signal handler tests
 ├── bench/
 │   ├── benchmark.hpp           # Benchmark utilities
 │   └── benchmark.cpp           # Benchmark suite
@@ -382,47 +391,44 @@ Sample results (localhost, single-threaded):
 Operations per tests: 100000
 
 --- Store (in-memory) ---
-put (key=16, val=64)         100000 ops  elapsed time=0.08 s  throughput=1257229 ops/s  avg latency=0.80 us
-put (key=16, val=1024)       100000 ops  elapsed time=0.13 s  throughput=760142 ops/s  avg latency=1.32 us
-get                          100000 ops  elapsed time=0.05 s  throughput=1841291 ops/s  avg latency=0.54 us
-mixed (80% reads)            100000 ops  elapsed time=0.08 s  throughput=1291920 ops/s  avg latency=0.77 us
+put (key=16, val=64)         100000 ops  elapsed time=0.44 s  throughput=225517 ops/s  avg latency=4.43 us
+put (key=16, val=1024)       100000 ops  elapsed time=0.83 s  throughput=121123 ops/s  avg latency=8.26 us
+get                          100000 ops  elapsed time=0.36 s  throughput=279628 ops/s  avg latency=3.58 us
+mixed (80% reads)            100000 ops  elapsed time=0.44 s  throughput=228742 ops/s  avg latency=4.37 us
 
 --- DiskStore ---
-put (key=16, val=64)          10000 ops  elapsed time=0.02 s  throughput=424410 ops/s  avg latency=2.36 us
-put (key=16, val=1024)        10000 ops  elapsed time=0.03 s  throughput=309357 ops/s  avg latency=3.23 us
-get                           10000 ops  elapsed time=0.02 s  throughput=601649 ops/s  avg latency=1.66 us
-mixed (80% reads)             10000 ops  elapsed time=0.02 s  throughput=530645 ops/s  avg latency=1.88 us
+put (key=16, val=64)          10000 ops  elapsed time=0.10 s  throughput=104108 ops/s  avg latency=9.61 us
+put (key=16, val=1024)        10000 ops  elapsed time=0.12 s  throughput=84186 ops/s  avg latency=11.88 us
+get                           10000 ops  elapsed time=0.08 s  throughput=129597 ops/s  avg latency=7.72 us
+mixed (80% reads)             10000 ops  elapsed time=0.09 s  throughput=112133 ops/s  avg latency=8.92 us
 
-2026-01-28 12:54:19.561 [INFO ] Server started on 127.0.0.1:0
 --- Network throughput (text) ---
-ping                         100000 ops  elapsed time=2.06 s  throughput=48642 ops/s  avg latency=20.56 us
-put (key=16, val=64)         100000 ops  elapsed time=2.04 s  throughput=49088 ops/s  avg latency=20.37 us
-put (key=16, val=1024)       100000 ops  elapsed time=2.19 s  throughput=45723 ops/s  avg latency=21.87 us
-get                          100000 ops  elapsed time=2.38 s  throughput=41954 ops/s  avg latency=23.84 us
+ping                         100000 ops  elapsed time=4.58 s  throughput=21824 ops/s  avg latency=45.82 us
+put (key=16, val=64)         100000 ops  elapsed time=6.10 s  throughput=16402 ops/s  avg latency=60.97 us
+put (key=16, val=1024)       100000 ops  elapsed time=17.82 s  throughput=5610 ops/s  avg latency=178.24 us
+get                          100000 ops  elapsed time=5.64 s  throughput=17719 ops/s  avg latency=56.44 us
 
 --- Network latency (text) ---
-ping                       p50=19.41 us  p90=21.49 us  p99=37.43 us  p99.9=154.80 us  max=273.95 us
-put (key=16, val=64)       p50=18.50 us  p90=19.70 us  p99=27.03 us  p99.9=171.19 us  max=1589.87 us
-put (key=16, val=1024)     p50=20.35 us  p90=21.13 us  p99=26.31 us  p99.9=43.26 us  max=10662.67 us
-get                        p50=23.21 us  p90=24.15 us  p99=41.62 us  p99.9=101.18 us  max=450.28 us
+ping                       p50=43.70 us  p90=47.37 us  p99=83.62 us  p99.9=178.10 us  max=193.77 us
+put (key=16, val=64)       p50=62.28 us  p90=70.56 us  p99=129.33 us  p99.9=216.01 us  max=263.10 us
+put (key=16, val=1024)     p50=174.28 us  p90=191.13 us  p99=287.78 us  p99.9=468.00 us  max=543.80 us
+get                        p50=53.67 us  p90=62.33 us  p99=131.71 us  p99.9=228.38 us  max=297.61 us
 
 --- Multi-threaded (text) ---
-put (key=16, val=64)       threads=1  ops=10000  time=0.19 s  throughput=51569 ops/s
-put (key=16, val=64)       threads=2  ops=20000  time=0.21 s  throughput=94566 ops/s
-put (key=16, val=64)       threads=4  ops=40000  time=0.21 s  throughput=189264 ops/s
-put (key=16, val=64)       threads=8  ops=80000  time=0.23 s  throughput=340575 ops/s
+put (key=16, val=64)       threads=1  ops=10000  time=0.63 s  throughput=15990 ops/s
+put (key=16, val=64)       threads=2  ops=20000  time=0.74 s  throughput=27137 ops/s
+put (key=16, val=64)       threads=4  ops=40000  time=1.46 s  throughput=27480 ops/s
+put (key=16, val=64)       threads=8  ops=80000  time=2.86 s  throughput=27942 ops/s
 
-mixed (80% reads)          threads=1  ops=10000  time=0.24 s  throughput=42072 ops/s
-mixed (80% reads)          threads=2  ops=20000  time=0.24 s  throughput=82303 ops/s
-mixed (80% reads)          threads=4  ops=40000  time=0.26 s  throughput=156723 ops/s
-mixed (80% reads)          threads=8  ops=80000  time=0.29 s  throughput=275685 ops/s
+mixed (80% reads)          threads=1  ops=10000  time=0.61 s  throughput=16320 ops/s
+mixed (80% reads)          threads=2  ops=20000  time=0.60 s  throughput=33178 ops/s
+mixed (80% reads)          threads=4  ops=40000  time=1.09 s  throughput=36710 ops/s
+mixed (80% reads)          threads=8  ops=80000  time=2.18 s  throughput=36636 ops/s
 
 --- Protocol comparison ---
-text: put (key=16, val=64)     50000 ops  elapsed time=0.95 s  throughput=52367 ops/s  avg latency=19.10 us
-binary: put (key=16, val=64)     50000 ops  elapsed time=0.92 s  throughput=54440 ops/s  avg latency=18.37 us
+text: put (key=16, val=64)     50000 ops  elapsed time=3.10 s  throughput=16106 ops/s  avg latency=62.09 us
+binary: put (key=16, val=64)     50000 ops  elapsed time=2.49 s  throughput=20102 ops/s  avg latency=49.75 us
 
-2026-01-28 12:54:35.491 [INFO ] Server stopping...
-2026-01-28 12:54:35.491 [INFO ] Server stopped
 Benchmark complete
 ```
 

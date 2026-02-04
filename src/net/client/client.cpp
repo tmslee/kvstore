@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -41,6 +42,13 @@ class Client::Impl {
         }
 
         socket_fd_.reset(fd);
+
+        // disable Nagle's algorithm for lower latency
+        int nodelay = 1;
+        if (setsockopt(socket_fd_.get(), IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) < 0) {
+            socket_fd_.reset();
+            throw std::runtime_error("failed to set TCP_NODELAY: " + std::string(strerror(errno)));
+        }
 
         if (options_.timeout_seconds > 0) {
             struct timeval tv;

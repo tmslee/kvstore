@@ -2,6 +2,7 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <signal.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -249,6 +250,12 @@ class Server::Impl {
             return;
         }
 
+        // disable Nagle's algorithm for lower latency
+        int nodelay = 1;
+        if (setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) < 0) {
+            LOG_WARN("Failed to set TCP_NODELAY: " + std::string(strerror(errno)));
+        }
+
         // make non-blocking and create connection
         if (!Connection::set_nonblocking(client_fd)) {
             close(client_fd);
@@ -272,16 +279,6 @@ class Server::Impl {
         loop_.add(client_fd, kEventRead,
                   [this, client_fd](int, uint32_t events) { handle_client(client_fd, events); });
     }
-
-    /*
-        note: in handle client we add kEventWrite only after processing a request.
-        if socket was already writable we wont know until next epoll_wait() call
-        latency is at most 1 poll iteration (100ms timeout) this is okay for most cases
-
-        for high throughput scenarios you could: try writing imeediately after queueing response
-        and only watch kEventWrite if theres still data left
-        or use edge-triggered mode (EPOLLET) which requires more careful handling
-    */
 
     void handle_client(int client_fd, uint32_t events) {
         auto it = connections_.find(client_fd);
@@ -338,9 +335,17 @@ class Server::Impl {
                 return;
             }
 
-            // if we have data to send, watch for writability
+            // try to write immediately - avoid waiting for next poll cycle
             if (conn->has_pending_write()) {
-                loop_.modify(client_fd, kEventRead | kEventWrite);
+                auto write_result = conn->do_write();
+                if (write_result == IoResult::Error) {
+                    close_client(client_fd);
+                    return;
+                }
+                // only watch for kEventWrite if we couldn't finish writing
+                if (conn->has_pending_write()) {
+                    loop_.modify(client_fd, kEventRead | kEventWrite);
+                }
             }
         }
 
