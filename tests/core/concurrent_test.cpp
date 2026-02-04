@@ -86,7 +86,7 @@ TEST_F(StoreConcurrentTest, ConcurrentPutRemove) {
                     store_->put(key, "value");
                     ++put_count;
                 } else {
-                    store_->remove(key);
+                    (void)store_->remove(key);
                     ++remove_count;
                 }
             }
@@ -231,7 +231,7 @@ TEST_F(DiskStoreConcurrentTest, ConcurrentWithAutoCompaction) {
                 if (i % 3 == 0) {
                     store_->put(key, value);
                 } else if (i % 3 == 1) {
-                    store_->remove(key);
+                    (void)store_->remove(key);
                 } else {
                     auto result = store_->get(key);
                     // Result may or may not exist depending on timing
