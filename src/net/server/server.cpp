@@ -42,6 +42,22 @@ static SigpipeIgnorer sigpipe_ignorer;
 
 }  // namespace
 
+// Server implementation using single-threaded event loop model (epoll/kqueue).
+//
+// Threading Model:
+// - One event thread runs the event loop and handles ALL client I/O
+// - One cleanup thread periodically removes expired keys (if enabled)
+// - The main thread can call start()/stop() from outside
+//
+// This single-threaded I/O model has important benefits:
+// - No locks needed for connection map or individual connections
+// - No race conditions when closing connections (close always happens from event thread)
+// - Simpler reasoning about state transitions
+// - Callbacks for a given fd are never called concurrently
+//
+// The trade-off is that one slow client can block others. For a KV store with
+// small requests this is acceptable. For production with large payloads,
+// consider thread-per-connection or thread pool models.
 class Server::Impl {
    public:
     Impl(core::IStore& store, const ServerOptions& options)
@@ -303,6 +319,16 @@ class Server::Impl {
                 }
             }
 
+            // check if parsing failed due to limit violation
+            if (conn->has_protocol_error()) {
+                LOG_WARN("Protocol limit exceeded for fd=" + std::to_string(client_fd) + ": " +
+                         conn->protocol_error());
+                conn->queue_response(Response::error(conn->protocol_error()));
+                conn->do_write();
+                close_client(client_fd);
+                return;
+            }
+
             // if we have data to send, watch for writability
             if (conn->has_pending_write()) {
                 loop_.modify(client_fd, kEventRead | kEventWrite);
@@ -324,6 +350,11 @@ class Server::Impl {
         }
     }
 
+    // Close a client connection and clean up resources.
+    // Safe to call without synchronization because:
+    // 1. Only called from event loop thread (via handle_client callback)
+    // 2. EventLoop defers callback removal until after current callback returns
+    // 3. Connection destructor closes the fd via FdGuard
     void close_client(int client_fd) {
         LOG_DEBUG("Client disconnected, fd=" + std::to_string(client_fd));
         loop_.remove(client_fd);

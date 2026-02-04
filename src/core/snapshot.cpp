@@ -33,6 +33,9 @@ void Snapshot::save(const EntryIterator& iterate) {
 
     // remember position for count (we'll update it later)
     off_t count_pos = lseek(fd, 0, SEEK_CUR);
+    if (count_pos < 0) {
+        throw std::runtime_error("lseek failed: " + std::string(strerror(errno)));
+    }
 
     // write placeholder for count (we dont know yet)
     util::write_int_fd<uint64_t>(fd, 0);
@@ -52,7 +55,9 @@ void Snapshot::save(const EntryIterator& iterate) {
     });
 
     // seek back and update our entry count
-    lseek(fd, count_pos, SEEK_SET);
+    if (lseek(fd, count_pos, SEEK_SET) < 0) {
+        throw std::runtime_error("lseek failed: " + std::string(strerror(errno)));
+    }
     util::write_int_fd<uint64_t>(fd, count);
 
     // fsync to ensure data is on physical disk before rename

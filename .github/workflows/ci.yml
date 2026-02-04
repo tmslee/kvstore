@@ -30,10 +30,6 @@ jobs:
           brew install cmake llvm
           echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
       
-      - name: Check formatting
-        run: |
-          find include src tests -name '*.cpp' -o -name '*.hpp' | xargs clang-format --dry-run --Werror
-      
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
       

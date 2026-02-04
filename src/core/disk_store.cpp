@@ -21,6 +21,15 @@ namespace util = kvstore::util;
 namespace {
 
 constexpr uint32_t kMagic = 0x4B564453;  //"KVDS"
+
+// Helper to check lseek result and throw on error
+inline off_t checked_lseek(int fd, off_t offset, int whence) {
+    off_t result = lseek(fd, offset, whence);
+    if (result < 0) {
+        throw std::runtime_error("lseek failed: " + std::string(strerror(errno)));
+    }
+    return result;
+}
 constexpr uint32_t kVersion = 1;
 constexpr uint8_t kEntryRegular = 0;
 constexpr uint8_t kEntryTombstone = 1;
@@ -205,7 +214,7 @@ class DiskStore::Impl {
    private:
     void load_index() {
         // go to beginning
-        lseek(fd_.get(), 0, SEEK_SET);
+        checked_lseek(fd_.get(), 0, SEEK_SET);
 
         // header check
         if (!validate_header()) {
@@ -213,17 +222,17 @@ class DiskStore::Impl {
         }
 
         // get file size to know when we've reached the end
-        off_t file_size = lseek(fd_.get(), 0, SEEK_END);
-        lseek(fd_.get(), 8, SEEK_SET);  // skip header (magic + version = 8 bytes)
+        off_t file_size = checked_lseek(fd_.get(), 0, SEEK_END);
+        checked_lseek(fd_.get(), 8, SEEK_SET);  // skip header (magic + version = 8 bytes)
 
         size_t entries_loaded = 0;
         size_t entries_corrupted = 0;
         uint64_t last_good_offset = 8;
 
         // read every entry
-        while (lseek(fd_.get(), 0, SEEK_CUR) < file_size) {
+        while (checked_lseek(fd_.get(), 0, SEEK_CUR) < file_size) {
             // keep current offset
-            uint64_t offset = lseek(fd_.get(), 0, SEEK_CUR);
+            uint64_t offset = checked_lseek(fd_.get(), 0, SEEK_CUR);
 
             // fetch type, key, value, expiration time
             uint8_t entry_type;
@@ -288,7 +297,7 @@ class DiskStore::Impl {
             }
 
             ++entries_loaded;
-            last_good_offset = lseek(fd_.get(), 0, SEEK_CUR);
+            last_good_offset = checked_lseek(fd_.get(), 0, SEEK_CUR);
         }
 
         // log summary
@@ -305,7 +314,7 @@ class DiskStore::Impl {
     void append_entry(std::string_view key, std::string_view value,
                       util::ExpirationTime expires_at_ms, bool is_tombstone) {
         // write to end of the file (append)
-        uint64_t offset = lseek(fd_.get(), 0, SEEK_END);
+        uint64_t offset = checked_lseek(fd_.get(), 0, SEEK_END);
 
         // write entry
         uint8_t entry_type = is_tombstone ? kEntryTombstone : kEntryRegular;
@@ -349,7 +358,7 @@ class DiskStore::Impl {
 
     // Read value from any fd at a specific offset (for concurrent reads during compaction)
     [[nodiscard]] static std::string read_value_from_fd(int fd, uint64_t offset) {
-        lseek(fd, offset, SEEK_SET);
+        checked_lseek(fd, offset, SEEK_SET);
         uint8_t entry_type;
         util::read_int_fd<uint8_t>(fd, entry_type);
         std::string key;
@@ -384,7 +393,7 @@ class DiskStore::Impl {
                 snapshot.emplace_back(key, entry);
             }
         }
-        uint64_t compaction_start_offset = lseek(fd_.get(), 0, SEEK_END);
+        uint64_t compaction_start_offset = checked_lseek(fd_.get(), 0, SEEK_END);
 
         // Release lock during I/O-heavy phase
         lock.unlock();
@@ -431,11 +440,11 @@ class DiskStore::Impl {
         lock.lock();
 
         // Read any entries written since compaction started and append to temp
-        uint64_t current_end = lseek(fd_.get(), 0, SEEK_END);
+        uint64_t current_end = checked_lseek(fd_.get(), 0, SEEK_END);
         if (current_end > compaction_start_offset) {
-            lseek(fd_.get(), compaction_start_offset, SEEK_SET);
+            checked_lseek(fd_.get(), compaction_start_offset, SEEK_SET);
 
-            while (lseek(fd_.get(), 0, SEEK_CUR) < static_cast<off_t>(current_end)) {
+            while (checked_lseek(fd_.get(), 0, SEEK_CUR) < static_cast<off_t>(current_end)) {
                 uint8_t entry_type;
                 if (!util::read_int_fd<uint8_t>(fd_.get(), entry_type)) {
                     break;

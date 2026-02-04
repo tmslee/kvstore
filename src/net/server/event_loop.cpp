@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <cstring>
 #include <stdexcept>
 
 #include "kvstore/util/logger.hpp"
@@ -107,14 +108,18 @@ void EventLoop::remove(int fd) {
     // EPOLL_CTL_DEL ignores the event parameter (can be nullptr in newer kernels)
     // but older kernels require non-null so we pass dummy
     epoll_event ev{};
-    epoll_ctl(event_fd_.get(), EPOLL_CTL_DEL, fd,
-              &ev);  // ignore errors (fd might already be closed)
+    if (epoll_ctl(event_fd_.get(), EPOLL_CTL_DEL, fd, &ev) < 0) {
+        // Log but don't throw - fd might already be closed (EBADF) or not registered (ENOENT)
+        LOG_DEBUG("epoll_ctl DEL failed for fd=" + std::to_string(fd) + ": " + strerror(errno));
+    }
 #elif defined(__APPLE__) || defined(__FreeBSD__)
-    // Remove both read and write filters (ignore errors - fd might already be closed)
+    // Remove both read and write filters (log errors but don't throw - fd might already be closed)
     struct kevent changes[2];
     EV_SET(&changes[0], fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
     EV_SET(&changes[1], fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
-    kevent(event_fd_.get(), changes, 2, nullptr, 0, nullptr);
+    if (kevent(event_fd_.get(), changes, 2, nullptr, 0, nullptr) < 0) {
+        LOG_DEBUG("kevent DEL failed for fd=" + std::to_string(fd) + ": " + strerror(errno));
+    }
     fd_events_.erase(fd);
 #endif
 
@@ -160,7 +165,11 @@ int EventLoop::poll(int timeout_ms) {
             } catch (const std::exception& e) {
                 in_callback_ = false;
                 process_pending_removals();
-                LOG_ERROR("EventLoop callback error: " + std::string(e.what()));
+                LOG_ERROR("EventLoop callback error for fd=" + std::to_string(fd) + ": " +
+                          std::string(e.what()));
+                // Remove fd to prevent repeated errors from corrupted state.
+                // The callback is responsible for closing the fd itself.
+                remove(fd);
             }
         }
     }
@@ -218,7 +227,11 @@ int EventLoop::poll(int timeout_ms) {
             } catch (const std::exception& e) {
                 in_callback_ = false;
                 process_pending_removals();
-                LOG_ERROR("EventLoop callback error: " + std::string(e.what()));
+                LOG_ERROR("EventLoop callback error for fd=" + std::to_string(fd) + ": " +
+                          std::string(e.what()));
+                // Remove fd to prevent repeated errors from corrupted state.
+                // The callback is responsible for closing the fd itself.
+                remove(fd);
             }
         }
     }
@@ -228,9 +241,14 @@ int EventLoop::poll(int timeout_ms) {
 }
 
 void EventLoop::run() {
+    // Poll timeout: how often to check the running_ flag when no events occur.
+    // Lower values = faster shutdown response but more CPU usage when idle.
+    // 100ms is a reasonable balance for server applications.
+    static constexpr int kPollTimeoutMs = 100;
+
     running_ = true;
     while (running_) {
-        poll(100);  // 100ms timeout to check running_ flag periodically
+        poll(kPollTimeoutMs);
     }
 }
 

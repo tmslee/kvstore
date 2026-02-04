@@ -2,6 +2,7 @@
 
 #include <mutex>
 #include <optional>
+#include <queue>
 #include <shared_mutex>
 #include <unordered_map>
 
@@ -17,6 +18,17 @@ struct Entry {
     std::string value;
     std::optional<util::TimePoint> expires_at = std::nullopt;
 };
+
+// Min-heap for efficient expiration cleanup: (expiration_time, key)
+// Uses lazy deletion - when popping, verify the key still exists with matching expiration
+using ExpirationEntry = std::pair<util::TimePoint, std::string>;
+struct ExpirationCompare {
+    bool operator()(const ExpirationEntry& a, const ExpirationEntry& b) const {
+        return a.first > b.first;  // min-heap: smallest expiration first
+    }
+};
+using ExpirationQueue =
+    std::priority_queue<ExpirationEntry, std::vector<ExpirationEntry>, ExpirationCompare>;
 
 class Store::Impl {
    public:
@@ -35,6 +47,9 @@ class Store::Impl {
                     }
                     if (!expires_at.has_value() || expires_at.value() > clock_->now()) {
                         data_[std::string(key)] = Entry{std::string(value), expires_at};
+                        if (expires_at.has_value()) {
+                            expiration_queue_.emplace(expires_at.value(), std::string(key));
+                        }
                     }
                 });
             }
@@ -75,6 +90,7 @@ class Store::Impl {
                     snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
             }
             data_[std::string(key)] = Entry{std::string(value), expires_at};
+            expiration_queue_.emplace(expires_at, std::string(key));
         }
         if (should_snapshot) {
             try_auto_snapshot();
@@ -139,6 +155,7 @@ class Store::Impl {
                     snapshot_ && (wal_entries_since_snapshot_ >= options_.snapshot_threshold);
             }
             data_.clear();
+            expiration_queue_ = ExpirationQueue{};  // clear expiration queue
         }
         if (should_snapshot) {
             try_auto_snapshot();
@@ -157,12 +174,22 @@ class Store::Impl {
     void cleanup_expired() {
         std::unique_lock lock(mutex_);
         auto now = clock_->now();
-        for (auto it = data_.begin(); it != data_.end();) {
-            if (it->second.expires_at.has_value() && it->second.expires_at.value() <= now) {
-                it = data_.erase(it);
-            } else {
-                ++it;
+
+        // Process expiration queue - O(k) where k = number of expired entries
+        // Uses lazy deletion: verify key still exists with matching expiration
+        while (!expiration_queue_.empty()) {
+            const auto& [exp_time, key] = expiration_queue_.top();
+            if (exp_time > now) {
+                break;  // no more expired entries
             }
+
+            // Check if this entry is still valid (not updated/deleted since queued)
+            auto it = data_.find(key);
+            if (it != data_.end() && it->second.expires_at.has_value() &&
+                it->second.expires_at.value() == exp_time) {
+                data_.erase(it);
+            }
+            expiration_queue_.pop();
         }
     }
 
@@ -185,6 +212,7 @@ class Store::Impl {
                     auto expires_at = util::from_epoch_ms(expires_at_ms.value());
                     if (expires_at > clock_->now()) {
                         data_[std::string(key)] = Entry{std::string(value), expires_at};
+                        expiration_queue_.emplace(expires_at, std::string(key));
                     }
                     break;
                 }
@@ -193,6 +221,8 @@ class Store::Impl {
                     break;
                 case EntryType::Clear:
                     data_.clear();
+                    // clear expiration queue too
+                    expiration_queue_ = ExpirationQueue{};
                     break;
             }
         });
@@ -235,6 +265,7 @@ class Store::Impl {
     std::shared_ptr<util::Clock> clock_;
     mutable std::shared_mutex mutex_;
     std::unordered_map<std::string, Entry> data_;
+    ExpirationQueue expiration_queue_;  // min-heap for efficient cleanup
     std::unique_ptr<WriteAheadLog> wal_;
     std::unique_ptr<Snapshot> snapshot_;
     std::size_t wal_entries_since_snapshot_ = 0;

@@ -21,7 +21,13 @@ enum class IoResult {
     Closed       // peer closed connection
 };
 
-// represent a single client connection with its state and buffers
+// Represents a single client connection with its state and buffers.
+//
+// Thread Safety: Connection is designed for single-threaded use within an event loop.
+// All operations (do_read, do_write, try_parse_request, queue_response) must be called
+// from the same thread. The server's event loop guarantees this - all connection handling
+// happens in a single thread, so no synchronization is needed. This avoids the overhead
+// of locking and the complexity of concurrent buffer access.
 class Connection {
    public:
     explicit Connection(int fd, const ProtocolLimits& limits = {});
@@ -54,6 +60,16 @@ class Connection {
         return fd_.get();
     }
 
+    // check if request was rejected due to protocol limits (key/value/line size)
+    [[nodiscard]] bool has_protocol_error() const noexcept {
+        return !protocol_error_.empty();
+    }
+
+    // get the protocol error message (empty if no error)
+    [[nodiscard]] const std::string& protocol_error() const noexcept {
+        return protocol_error_;
+    }
+
     // set socket to non-blocking mode
     static bool set_nonblocking(int fd);
 
@@ -70,6 +86,8 @@ class Connection {
     size_t read_offset_{0};
     size_t write_offset_{0};
     static constexpr size_t kCompactThreshold = 4096;
+
+    std::string protocol_error_;  // set when request parsing fails due to limit violations
 };
 
 }  // namespace kvstore::net::server

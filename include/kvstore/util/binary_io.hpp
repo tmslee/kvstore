@@ -11,6 +11,10 @@
 
 namespace kvstore::util {
 
+// Maximum string size for file I/O to prevent memory exhaustion from malformed data
+// 256MB is generous for key-value data while preventing DoS from corrupted length prefixes
+constexpr uint32_t kMaxStringSize = 256 * 1024 * 1024;
+
 /*
     Binary I/O utilities for the kvstore project.
 
@@ -55,10 +59,13 @@ bool read_int_fd(int fd, T& value) {
     return bytes_read == static_cast<ssize_t>(sizeof(value));
 }
 
-inline bool read_string_fd(int fd, std::string& str) {
+inline bool read_string_fd(int fd, std::string& str, uint32_t max_size = kMaxStringSize) {
     uint32_t len;
     if (!read_int_fd<uint32_t>(fd, len)) {
         return false;
+    }
+    if (len > max_size) {
+        return false;  // reject oversized strings to prevent memory exhaustion
     }
     str.resize(len);
     if (len == 0) {
@@ -108,7 +115,8 @@ inline void write_string(std::vector<uint8_t>& buf, std::string_view s) {
     buf.insert(buf.end(), s.begin(), s.end());
 }
 
-inline std::string read_string(const uint8_t* data, size_t& offset, size_t max_size) {
+inline std::string read_string(const uint8_t* data, size_t& offset,
+                               size_t max_size = kMaxStringSize) {
     uint32_t len = read_int<uint32_t>(data, offset, max_size);
     if (offset + len > max_size) {
         throw std::runtime_error("Buffer underflow reading string");

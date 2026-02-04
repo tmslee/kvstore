@@ -110,6 +110,8 @@ std::optional<Request> Connection::try_parse_request() {
         protocol_detected_ = true;
     }
 
+    std::optional<Request> req;
+
     if (is_binary_) {
         // binary protocol: compact first since BinaryProtocol expects buffer to start at message
         if (read_offset_ > 0) {
@@ -128,14 +130,22 @@ std::optional<Request> Connection::try_parse_request() {
         }
 
         size_t consumed = 0;
-        auto req = BinaryProtocol::decode_request(read_buffer_, consumed);
+        req = BinaryProtocol::decode_request(read_buffer_, consumed);
         read_buffer_.erase(read_buffer_.begin(), read_buffer_.begin() + consumed);
-        return req;
 
     } else {
-        // text protocol: look for newline (search from offset)
+        // text protocol: check line length limit
         auto start = read_buffer_.begin() + read_offset_;
         auto it = std::find(start, read_buffer_.end(), '\n');
+
+        // check if accumulated data exceeds line limit (even before newline)
+        size_t line_length =
+            (it == read_buffer_.end()) ? (read_buffer_.end() - start) : (it - start);
+        if (line_length > limits_.max_line_size) {
+            protocol_error_ = "line too long";
+            return std::nullopt;
+        }
+
         if (it == read_buffer_.end()) {
             return std::nullopt;
         }
@@ -155,8 +165,22 @@ std::optional<Request> Connection::try_parse_request() {
             line.pop_back();
         }
 
-        return TextProtocol::decode_request(line);
+        req = TextProtocol::decode_request(line);
     }
+
+    // validate key/value sizes
+    if (req) {
+        if (req->key.size() > limits_.max_key_size) {
+            protocol_error_ = "key too large";
+            return std::nullopt;
+        }
+        if (req->value.size() > limits_.max_value_size) {
+            protocol_error_ = "value too large";
+            return std::nullopt;
+        }
+    }
+
+    return req;
 }
 
 void Connection::queue_response(const Response& response) {
