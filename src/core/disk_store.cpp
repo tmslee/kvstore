@@ -369,11 +369,18 @@ class DiskStore::Impl {
     [[nodiscard]] static std::string read_value_from_fd(int fd, uint64_t offset) {
         checked_lseek(fd, offset, SEEK_SET);
         uint8_t entry_type;
-        util::read_int_fd<uint8_t>(fd, entry_type);
+        if (!util::read_int_fd<uint8_t>(fd, entry_type)) {
+            throw std::runtime_error("failed to read entry type at offset " +
+                                     std::to_string(offset));
+        }
         std::string key;
-        util::read_string_fd(fd, key);
+        if (!util::read_string_fd(fd, key)) {
+            throw std::runtime_error("failed to read key at offset " + std::to_string(offset));
+        }
         std::string value;
-        util::read_string_fd(fd, value);
+        if (!util::read_string_fd(fd, value)) {
+            throw std::runtime_error("failed to read value at offset " + std::to_string(offset));
+        }
         return value;
     }
 

@@ -174,7 +174,8 @@ void WriteAheadLog::truncate() {
     std::lock_guard lock(mutex_);
 
     // Open new fd first before closing old one to maintain valid state on failure
-    int new_fd = open(path_.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    // Include O_APPEND to match constructor - ensures subsequent writes append correctly
+    int new_fd = open(path_.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, 0644);
     if (new_fd < 0) {
         throw std::runtime_error("failed to truncate WAL file: " + path_.string());
     }
