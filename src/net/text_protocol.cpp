@@ -106,6 +106,11 @@ Request TextProtocol::decode_request(const std::string& line) {
             }
             try {
                 req.ttl_ms = std::stoll(ttl_str);
+                // Validate TTL is non-negative
+                if (req.ttl_ms < 0) {
+                    req.command = Command::Unknown;
+                    break;
+                }
             } catch (const std::exception&) {
                 req.command = Command::Unknown;
                 break;
