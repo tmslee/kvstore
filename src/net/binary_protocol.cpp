@@ -95,12 +95,9 @@ std::optional<Request> BinaryProtocol::decode_request(const std::vector<uint8_t>
         case Command::PutEx:
             req.key = util::read_string(data.data(), offset, max_offset);
             req.value = util::read_string(data.data(), offset, max_offset);
-            if (offset + 8 > max_offset) {
-                throw std::runtime_error("Incomplete TTL");
-            }
+            // read_int checks bounds internally and increments offset
             req.ttl_ms =
                 static_cast<int64_t>(util::read_int<uint64_t>(data.data(), offset, max_offset));
-            offset += 8;
             break;
 
         case Command::Size:
