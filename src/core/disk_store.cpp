@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <climits>
 #include <cstring>
 #include <mutex>
@@ -216,8 +217,20 @@ class DiskStore::Impl {
     }
 
     void compact() {
-        std::unique_lock lock(mutex_);
-        do_compact_unlocked(lock);
+        // Skip if another compaction is already in progress
+        bool expected = false;
+        if (!compacting_.compare_exchange_strong(expected, true)) {
+            return;
+        }
+
+        try {
+            std::unique_lock lock(mutex_);
+            do_compact_unlocked(lock);
+            compacting_.store(false);
+        } catch (...) {
+            compacting_.store(false);
+            throw;
+        }
     }
 
    private:
@@ -392,10 +405,22 @@ class DiskStore::Impl {
     }
 
     void try_auto_compact() {
-        // Check threshold under lock, but do_compact releases lock during I/O
-        std::unique_lock lock(mutex_);
-        if (tombstone_count_ >= options_.compaction_threshold) {
-            do_compact_unlocked(lock);
+        // Skip if another compaction is already in progress
+        bool expected = false;
+        if (!compacting_.compare_exchange_strong(expected, true)) {
+            return;
+        }
+
+        try {
+            // Check threshold under lock, but do_compact releases lock during I/O
+            std::unique_lock lock(mutex_);
+            if (tombstone_count_ >= options_.compaction_threshold) {
+                do_compact_unlocked(lock);
+            }
+            compacting_.store(false);
+        } catch (...) {
+            compacting_.store(false);
+            throw;
         }
     }
 
@@ -566,6 +591,7 @@ class DiskStore::Impl {
     std::unordered_map<std::string, IndexEntry> index_;
     std::size_t tombstone_count_ = 0;
     std::size_t entry_count_ = 0;
+    std::atomic<bool> compacting_{false};  // Prevents concurrent compactions
 };
 
 // PIMPL INTERFACE ---------------------------------------------------------------------------

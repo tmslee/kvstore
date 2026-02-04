@@ -169,9 +169,8 @@ class DiskStoreConcurrentTest : public ::testing::Test {
 
         DiskStoreOptions opts;
         opts.data_dir = test_dir_;
-        // High threshold to avoid auto-compaction during concurrent tests
-        // (DiskStore doesn't support concurrent auto-compactions)
-        opts.compaction_threshold = 10000;
+        // Low threshold to trigger auto-compaction during concurrent tests
+        opts.compaction_threshold = 50;
         store_ = std::make_unique<DiskStore>(opts);
     }
 
@@ -215,13 +214,13 @@ TEST_F(DiskStoreConcurrentTest, ConcurrentPutGet) {
     EXPECT_EQ(store_->size(), kNumThreads * kOpsPerThread);
 }
 
-TEST_F(DiskStoreConcurrentTest, ConcurrentPutRemoveGet) {
+TEST_F(DiskStoreConcurrentTest, ConcurrentWithAutoCompaction) {
     constexpr int kNumThreads = 4;
     constexpr int kOpsPerThread = 200;
 
     std::vector<std::thread> threads;
 
-    // All threads write to overlapping key space
+    // All threads write to overlapping key space to trigger tombstones and auto-compaction
     for (int t = 0; t < kNumThreads; ++t) {
         threads.emplace_back([this, t]() {
             for (int i = 0; i < kOpsPerThread; ++i) {
