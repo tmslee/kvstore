@@ -165,7 +165,11 @@ int EventLoop::poll(int timeout_ms) {
             } catch (const std::exception& e) {
                 in_callback_ = false;
                 process_pending_removals();
-                LOG_ERROR("EventLoop callback error: " + std::string(e.what()));
+                LOG_ERROR("EventLoop callback error for fd=" + std::to_string(fd) + ": " +
+                          std::string(e.what()));
+                // Remove fd to prevent repeated errors from corrupted state.
+                // The callback is responsible for closing the fd itself.
+                remove(fd);
             }
         }
     }
@@ -223,7 +227,11 @@ int EventLoop::poll(int timeout_ms) {
             } catch (const std::exception& e) {
                 in_callback_ = false;
                 process_pending_removals();
-                LOG_ERROR("EventLoop callback error: " + std::string(e.what()));
+                LOG_ERROR("EventLoop callback error for fd=" + std::to_string(fd) + ": " +
+                          std::string(e.what()));
+                // Remove fd to prevent repeated errors from corrupted state.
+                // The callback is responsible for closing the fd itself.
+                remove(fd);
             }
         }
     }
@@ -233,9 +241,14 @@ int EventLoop::poll(int timeout_ms) {
 }
 
 void EventLoop::run() {
+    // Poll timeout: how often to check the running_ flag when no events occur.
+    // Lower values = faster shutdown response but more CPU usage when idle.
+    // 100ms is a reasonable balance for server applications.
+    static constexpr int kPollTimeoutMs = 100;
+
     running_ = true;
     while (running_) {
-        poll(100);  // 100ms timeout to check running_ flag periodically
+        poll(kPollTimeoutMs);
     }
 }
 

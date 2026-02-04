@@ -10,7 +10,7 @@ class FdGuard {
    public:
     explicit FdGuard(int fd = -1) : fd_(fd) {}
 
-    ~FdGuard() {
+    ~FdGuard() noexcept {
         if (fd_ >= 0) {
             close(fd_);
         }
@@ -36,29 +36,29 @@ class FdGuard {
         return *this;
     }
 
-    [[nodiscard]] int get() const {
+    [[nodiscard]] int get() const noexcept {
         return fd_;
     }
 
     // Release ownership - caller is responsible for closing
-    int release() {
+    int release() noexcept {
         int fd = fd_;
         fd_ = -1;
         return fd;
     }
 
     // Reset to a new fd (closes current if valid)
-    void reset(int fd = -1) {
+    void reset(int fd = -1) noexcept {
         if (fd_ >= 0) {
             close(fd_);
         }
         fd_ = fd;
     }
 
-    [[nodiscard]] bool valid() const {
+    [[nodiscard]] bool valid() const noexcept {
         return fd_ >= 0;
     }
-    explicit operator bool() const {
+    explicit operator bool() const noexcept {
         return valid();
     }
 

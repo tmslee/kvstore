@@ -321,7 +321,8 @@ class Server::Impl {
 
             // check if parsing failed due to limit violation
             if (conn->has_protocol_error()) {
-                LOG_DEBUG("Protocol limit exceeded: " + conn->protocol_error());
+                LOG_WARN("Protocol limit exceeded for fd=" + std::to_string(client_fd) + ": " +
+                         conn->protocol_error());
                 conn->queue_response(Response::error(conn->protocol_error()));
                 conn->do_write();
                 close_client(client_fd);

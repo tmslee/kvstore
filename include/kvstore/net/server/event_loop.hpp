@@ -47,6 +47,18 @@ namespace kvstore::net::server {
         - kEventWrite = ready to write
         - kEventError = error occurred
         - kEventHangup = peer closed connection
+
+    Exception Safety:
+        If a callback throws an exception, the EventLoop will:
+        1. Log the error
+        2. Remove the fd from the event loop to prevent repeated errors
+        3. Continue processing other events
+
+        The callback is responsible for closing the fd and cleaning up associated resources.
+        If a callback throws without closing the fd, the fd will be removed from monitoring
+        but not closed (the fd remains open but unmonitored until the owner closes it).
+
+        For robust servers, callbacks should catch exceptions internally and perform cleanup.
 */
 
 class EventLoop {
