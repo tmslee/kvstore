@@ -21,7 +21,13 @@ enum class IoResult {
     Closed       // peer closed connection
 };
 
-// represent a single client connection with its state and buffers
+// Represents a single client connection with its state and buffers.
+//
+// Thread Safety: Connection is designed for single-threaded use within an event loop.
+// All operations (do_read, do_write, try_parse_request, queue_response) must be called
+// from the same thread. The server's event loop guarantees this - all connection handling
+// happens in a single thread, so no synchronization is needed. This avoids the overhead
+// of locking and the complexity of concurrent buffer access.
 class Connection {
    public:
     explicit Connection(int fd, const ProtocolLimits& limits = {});

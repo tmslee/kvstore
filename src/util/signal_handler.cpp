@@ -25,6 +25,17 @@ void signal_handler(int signal) {
     [[maybe_unused]] auto ignored = write(signal_pipe[1], &c, 1);
 }
 
+void close_pipe() {
+    if (signal_pipe[0] >= 0) {
+        close(signal_pipe[0]);
+        signal_pipe[0] = -1;
+    }
+    if (signal_pipe[1] >= 0) {
+        close(signal_pipe[1]);
+        signal_pipe[1] = -1;
+    }
+}
+
 void create_pipe_if_needed() {
     if (signal_pipe[0] >= 0) {
         return;  // already created
@@ -75,14 +86,10 @@ void SignalHandler::request_shutdown() {
 void SignalHandler::reset() {
     shutdown_requested_.store(false);
     waiting_count_.store(0);
-    // drain any pending bytes from the pipe
-    if (signal_pipe[0] >= 0) {
-        fcntl(signal_pipe[0], F_SETFL, O_NONBLOCK);
-        char buf[16];
-        while (read(signal_pipe[0], buf, sizeof(buf)) > 0) {
-        }
-        fcntl(signal_pipe[0], F_SETFL, 0);  // back to blocking
-    }
+    // close and recreate pipe for complete test isolation
+    // this ensures no stale bytes from previous tests affect the current test
+    close_pipe();
+    create_pipe_if_needed();
 }
 
 }  // namespace kvstore::util
