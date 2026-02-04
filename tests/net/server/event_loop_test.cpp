@@ -182,3 +182,80 @@ TEST_F(EventLoopTest, CallbackException) {
     int n = loop.poll(100);
     EXPECT_EQ(n, 1);
 }
+
+TEST_F(EventLoopTest, CallbackExceptionRemovesFd) {
+    EventLoop loop;
+    int call_count = 0;
+
+    loop.add(fds_[0], kEventRead, [&](int, uint32_t) {
+        ++call_count;
+        throw std::runtime_error("test exception");
+    });
+
+    [[maybe_unused]] auto ignored = write(fds_[1], "x", 1);
+
+    // First poll triggers exception - fd gets removed
+    loop.poll(100);
+    EXPECT_EQ(call_count, 1);
+
+    // Write more data
+    [[maybe_unused]] auto ignored2 = write(fds_[1], "y", 1);
+
+    // Second poll should not trigger callback (fd was removed)
+    loop.poll(0);
+    EXPECT_EQ(call_count, 1);
+}
+
+TEST_F(EventLoopTest, RemoveFdFromCallback) {
+    EventLoop loop;
+    int call_count = 0;
+
+    loop.add(fds_[0], kEventRead, [&](int fd, uint32_t) {
+        ++call_count;
+        loop.remove(fd);  // Remove self from within callback
+    });
+
+    [[maybe_unused]] auto ignored = write(fds_[1], "x", 1);
+
+    // Should handle self-removal gracefully
+    loop.poll(100);
+    EXPECT_EQ(call_count, 1);
+
+    // Write more data
+    [[maybe_unused]] auto ignored2 = write(fds_[1], "y", 1);
+
+    // Should not trigger again
+    loop.poll(0);
+    EXPECT_EQ(call_count, 1);
+}
+
+TEST_F(EventLoopTest, ExceptionInOneCallbackDoesNotAffectOthers) {
+    int fds2[2];
+    ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds2), 0);
+
+    EventLoop loop;
+    int count1 = 0, count2 = 0;
+
+    // First fd throws
+    loop.add(fds_[0], kEventRead, [&](int, uint32_t) {
+        ++count1;
+        throw std::runtime_error("fd1 exception");
+    });
+
+    // Second fd is normal
+    loop.add(fds2[0], kEventRead, [&](int, uint32_t) { ++count2; });
+
+    // Make both readable
+    [[maybe_unused]] auto ignored1 = write(fds_[1], "a", 1);
+    [[maybe_unused]] auto ignored2 = write(fds2[1], "b", 1);
+
+    // Both should be processed (order may vary)
+    loop.poll(100);
+
+    // Both callbacks should have been invoked
+    EXPECT_EQ(count1, 1);
+    EXPECT_EQ(count2, 1);
+
+    close(fds2[0]);
+    close(fds2[1]);
+}
