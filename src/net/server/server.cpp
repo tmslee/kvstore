@@ -425,6 +425,8 @@ class Server::Impl {
                     store_.cleanup_expired();
                 } catch (const std::exception& e) {
                     LOG_ERROR("Cleanup error: " + std::string(e.what()));
+                } catch (...) {
+                    LOG_ERROR("Cleanup error: unknown exception");
                 }
             }
         }
