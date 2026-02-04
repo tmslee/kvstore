@@ -1,5 +1,6 @@
 #include "kvstore/net/binary_protocol.hpp"
 
+#include <climits>
 #include <cstring>
 #include <stdexcept>
 
@@ -44,6 +45,11 @@ std::vector<uint8_t> BinaryProtocol::encode_request(const Request& req) {
             break;
         default:
             break;
+    }
+
+    // Protocol uses 32-bit length field - reject oversized payloads
+    if (payload.size() > UINT32_MAX) {
+        throw std::runtime_error("Payload too large for binary protocol");
     }
 
     std::vector<uint8_t> result;
@@ -123,6 +129,11 @@ std::vector<uint8_t> BinaryProtocol::encode_response(const Response& resp) {
 
     if (!resp.data.empty()) {
         util::write_string(payload, resp.data);  // optional data
+    }
+
+    // Protocol uses 32-bit length field - reject oversized payloads
+    if (payload.size() > UINT32_MAX) {
+        throw std::runtime_error("Response payload too large for binary protocol");
     }
 
     std::vector<uint8_t> result;

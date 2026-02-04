@@ -23,7 +23,9 @@ EventLoop::EventLoop() {
         throw std::runtime_error("failed to create kqueue instance");
     }
     // Set close-on-exec flag manually for kqueue
-    fcntl(event_fd_.get(), F_SETFD, FD_CLOEXEC);
+    if (fcntl(event_fd_.get(), F_SETFD, FD_CLOEXEC) < 0) {
+        LOG_WARN("Failed to set FD_CLOEXEC on kqueue fd");
+    }
 #endif
 }
 

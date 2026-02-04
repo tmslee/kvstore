@@ -51,10 +51,11 @@ IoResult Connection::do_read() {
 
     if (n > 0) {
         // check size limit before appending
-        if (read_buffer_.size() + n > limits_.max_message_size) {
+        size_t bytes_read = static_cast<size_t>(n);
+        if (read_buffer_.size() + bytes_read > limits_.max_message_size) {
             return IoResult::Error;
         }
-        read_buffer_.insert(read_buffer_.end(), buf, buf + n);
+        read_buffer_.insert(read_buffer_.end(), buf, buf + bytes_read);
         return IoResult::Ok;
     } else if (n == 0) {
         return IoResult::Closed;
@@ -77,7 +78,7 @@ IoResult Connection::do_write() {
     ssize_t n = send(fd_.get(), write_buffer_.data() + write_offset_, pending, MSG_NOSIGNAL);
 
     if (n > 0) {
-        write_offset_ += n;
+        write_offset_ += static_cast<size_t>(n);
         // compact buffer when consumed portion exceeds threshold
         if (write_offset_ > kCompactThreshold) {
             write_buffer_.erase(write_buffer_.begin(), write_buffer_.begin() + write_offset_);

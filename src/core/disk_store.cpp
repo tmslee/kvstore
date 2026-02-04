@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <climits>
 #include <cstring>
 #include <mutex>
 #include <shared_mutex>
@@ -75,6 +76,10 @@ class DiskStore::Impl {
     ~Impl() = default;  // FdGuard handles fd cleanup
 
     void put(std::string_view key, std::string_view value) {
+        // File format uses 32-bit length prefixes
+        if (key.size() > UINT32_MAX || value.size() > UINT32_MAX) {
+            throw std::runtime_error("Key or value too large for disk store");
+        }
         bool should_compact = false;
         {
             std::unique_lock lock(mutex_);
@@ -87,6 +92,10 @@ class DiskStore::Impl {
     }
 
     void put(std::string_view key, std::string_view value, util::Duration ttl) {
+        // File format uses 32-bit length prefixes
+        if (key.size() > UINT32_MAX || value.size() > UINT32_MAX) {
+            throw std::runtime_error("Key or value too large for disk store");
+        }
         bool should_compact = false;
         {
             std::unique_lock lock(mutex_);
@@ -168,7 +177,7 @@ class DiskStore::Impl {
         util::write_int_fd<uint32_t>(fd_.get(), kMagic);
         util::write_int_fd<uint32_t>(fd_.get(), kVersion);
         if (fsync(fd_.get()) != 0) {
-            throw std::runtime_error("failed ot fsync after clear: " +
+            throw std::runtime_error("failed to fsync after clear: " +
                                      std::string(strerror(errno)));
         }
 

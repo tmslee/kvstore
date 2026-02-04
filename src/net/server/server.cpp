@@ -258,7 +258,8 @@ class Server::Impl {
         try {
             conn = std::make_unique<Connection>(client_fd, limits_);
         } catch (...) {
-            close(client_fd);  // Connection doesn't exist, we must close
+            // Note: Connection constructor initializes FdGuard first, so fd is already
+            // owned and will be closed by FdGuard destructor. Don't close here.
             LOG_ERROR("Failed to create connection");
             return;
         }
