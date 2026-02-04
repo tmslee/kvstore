@@ -125,7 +125,11 @@ class Client::Impl {
         if (resp.status != Status::Ok) {
             throw std::runtime_error("SIZE failed: " + resp.data);
         }
-        return std::stoull(resp.data);
+        try {
+            return std::stoull(resp.data);
+        } catch (const std::exception&) {
+            throw std::runtime_error("SIZE failed: invalid response '" + resp.data + "'");
+        }
     }
 
     void clear() {
