@@ -115,7 +115,8 @@ inline void write_string(std::vector<uint8_t>& buf, std::string_view s) {
     buf.insert(buf.end(), s.begin(), s.end());
 }
 
-inline std::string read_string(const uint8_t* data, size_t& offset, size_t max_size=kMaxStringSize) {
+inline std::string read_string(const uint8_t* data, size_t& offset,
+                               size_t max_size = kMaxStringSize) {
     uint32_t len = read_int<uint32_t>(data, offset, max_size);
     if (offset + len > max_size) {
         throw std::runtime_error("Buffer underflow reading string");

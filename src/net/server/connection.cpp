@@ -139,8 +139,8 @@ std::optional<Request> Connection::try_parse_request() {
         auto it = std::find(start, read_buffer_.end(), '\n');
 
         // check if accumulated data exceeds line limit (even before newline)
-        size_t line_length = (it == read_buffer_.end()) ? (read_buffer_.end() - start)
-                                                         : (it - start);
+        size_t line_length =
+            (it == read_buffer_.end()) ? (read_buffer_.end() - start) : (it - start);
         if (line_length > limits_.max_line_size) {
             protocol_error_ = "line too long";
             return std::nullopt;

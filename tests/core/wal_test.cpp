@@ -151,9 +151,8 @@ TEST_F(WALTest, BadMagicNumber) {
     }
 
     WriteAheadLog wal(wal_path_);
-    EXPECT_THROW(
-        wal.replay([](EntryType, std::string_view, std::string_view, ExpirationTime) {}),
-        std::runtime_error);
+    EXPECT_THROW(wal.replay([](EntryType, std::string_view, std::string_view, ExpirationTime) {}),
+                 std::runtime_error);
 }
 
 TEST_F(WALTest, BadVersion) {
@@ -167,9 +166,8 @@ TEST_F(WALTest, BadVersion) {
     }
 
     WriteAheadLog wal(wal_path_);
-    EXPECT_THROW(
-        wal.replay([](EntryType, std::string_view, std::string_view, ExpirationTime) {}),
-        std::runtime_error);
+    EXPECT_THROW(wal.replay([](EntryType, std::string_view, std::string_view, ExpirationTime) {}),
+                 std::runtime_error);
 }
 
 TEST_F(WALTest, TruncatedHeader) {
@@ -182,9 +180,8 @@ TEST_F(WALTest, TruncatedHeader) {
     }
 
     WriteAheadLog wal(wal_path_);
-    EXPECT_THROW(
-        wal.replay([](EntryType, std::string_view, std::string_view, ExpirationTime) {}),
-        std::runtime_error);
+    EXPECT_THROW(wal.replay([](EntryType, std::string_view, std::string_view, ExpirationTime) {}),
+                 std::runtime_error);
 }
 
 TEST_F(WALTest, TruncatedEntryMidWrite) {
@@ -290,7 +287,7 @@ TEST_F(WALTest, CorruptedKeyLength) {
     // Append entry with huge key length (simulates corruption)
     {
         std::ofstream f(wal_path_, std::ios::binary | std::ios::app);
-        uint8_t type = 1;  // Put
+        uint8_t type = 1;                // Put
         uint32_t huge_len = 0xFFFFFFFF;  // 4GB key - will fail to read
         f.write(reinterpret_cast<char*>(&type), sizeof(type));
         f.write(reinterpret_cast<char*>(&huge_len), sizeof(huge_len));

@@ -309,9 +309,9 @@ class ServerLimitsTest : public ::testing::Test {
         store_ = std::make_unique<core::Store>();
         server::ServerOptions opts;
         opts.port = 16383;
-        opts.max_line_size = 100;      // small limit for testing
-        opts.max_key_size = 10;        // max 10 byte keys
-        opts.max_value_size = 20;      // max 20 byte values
+        opts.max_line_size = 100;  // small limit for testing
+        opts.max_key_size = 10;    // max 10 byte keys
+        opts.max_value_size = 20;  // max 20 byte values
         server_ = std::make_unique<server::Server>(*store_, opts);
         server_->start();
     }
