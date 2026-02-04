@@ -44,7 +44,10 @@ void create_pipe_if_needed() {
         return;  // failed, wait_for_shutdown will spin
     }
     // make write end non-blocking so signal handler never blocks
-    fcntl(signal_pipe[1], F_SETFL, O_NONBLOCK);
+    if (fcntl(signal_pipe[1], F_SETFL, O_NONBLOCK) < 0) {
+        // fcntl failed - close pipe and fall back to spinning
+        close_pipe();
+    }
 }
 
 }  // namespace
