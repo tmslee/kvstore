@@ -514,7 +514,12 @@ class DiskStore::Impl {
         }
 
         // reopen the data file
-        fd_.reset(open(data_path_.c_str(), O_RDWR, 0644));
+        int new_fd = open(data_path_.c_str(), O_RDWR, 0644);
+        if (new_fd < 0) {
+            throw std::runtime_error("failed to reopen data file after compaction: " +
+                                     std::string(strerror(errno)));
+        }
+        fd_.reset(new_fd);
 
         index_.clear();
         load_index();
