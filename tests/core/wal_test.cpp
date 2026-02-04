@@ -246,7 +246,9 @@ TEST_F(WALTest, PartialEntryAtEnd) {
 
 TEST_F(WALTest, ZeroByteFile) {
     // Create empty file
-    { std::ofstream f(wal_path_, std::ios::binary); }
+    {
+        std::ofstream f(wal_path_, std::ios::binary);
+    }
     EXPECT_EQ(std::filesystem::file_size(wal_path_), 0);
 
     // Opening WAL on empty file should write header
