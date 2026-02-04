@@ -43,8 +43,12 @@ class Client::Impl {
             struct timeval tv;
             tv.tv_sec = options_.timeout_seconds;
             tv.tv_usec = 0;
-            setsockopt(socket_fd_.get(), SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-            setsockopt(socket_fd_.get(), SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+            if (setsockopt(socket_fd_.get(), SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0 ||
+                setsockopt(socket_fd_.get(), SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+                socket_fd_.reset();
+                throw std::runtime_error("failed to set socket timeout: " +
+                                         std::string(strerror(errno)));
+            }
         }
 
         sockaddr_in addr{};
