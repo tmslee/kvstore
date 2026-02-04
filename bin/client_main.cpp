@@ -1,8 +1,8 @@
-#include "kvstore/net/client/client.hpp"
-
 #include <iostream>
 #include <sstream>
 #include <string>
+
+#include "kvstore/net/client/client.hpp"
 
 using namespace kvstore::net::client;
 
@@ -180,7 +180,8 @@ int main(int argc, char* argv[]) {
                 break;
 
             } else if (cmd == "HELP") {
-                std::cout << "Commands: PUT, PUTEX, GET, DEL, EXISTS, SIZE, CLEAR, PING, QUIT" << std::endl;
+                std::cout << "Commands: PUT, PUTEX, GET, DEL, EXISTS, SIZE, CLEAR, PING, QUIT"
+                          << std::endl;
 
             } else {
                 std::cout << "ERROR unknown command: " << cmd << std::endl;
