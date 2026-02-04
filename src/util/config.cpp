@@ -55,6 +55,20 @@ uint64_t safe_stoull(const std::string& s, uint64_t default_val, const std::stri
     }
 }
 
+uint16_t safe_port(const std::string& s, uint16_t default_val) {
+    try {
+        int port = std::stoi(s);
+        if (port < 1 || port > 65535) {
+            std::cerr << "Warning: Port " << port << " out of range (1-65535), using default\n";
+            return default_val;
+        }
+        return static_cast<uint16_t>(port);
+    } catch (const std::exception&) {
+        std::cerr << "Warning: Invalid port value: '" << s << "', using default\n";
+        return default_val;
+    }
+}
+
 }  // namespace
 
 std::optional<Config> Config::load_file(const std::filesystem::path& path) {
@@ -89,7 +103,7 @@ std::optional<Config> Config::load_file(const std::filesystem::path& path) {
         if (key == "host") {
             config.host = value;
         } else if (key == "port") {
-            config.port = static_cast<uint16_t>(safe_stoi(value, 6379, "port"));
+            config.port = safe_port(value, 6379);
         } else if (key == "max_connections") {
             config.max_connections = safe_stoull(value, 1000, "max_connections");
         } else if (key == "client_timeout_seconds") {
@@ -144,7 +158,7 @@ std::optional<Config> Config::parse_args(int argc, char* argv[]) {
         if ((arg == "-H" || arg == "--host") && i + 1 < argc) {
             config.host = argv[++i];
         } else if ((arg == "-p" || arg == "--port") && i + 1 < argc) {
-            config.port = static_cast<uint16_t>(safe_stoi(argv[++i], 6379, "port"));
+            config.port = safe_port(argv[++i], 6379);
         } else if ((arg == "-d" || arg == "--data-dir") && i + 1 < argc) {
             config.data_dir = argv[++i];
         } else if ((arg == "-l" || arg == "--log-level") && i + 1 < argc) {
