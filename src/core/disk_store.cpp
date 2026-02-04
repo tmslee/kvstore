@@ -3,6 +3,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <atomic>
+#include <climits>
 #include <cstring>
 #include <mutex>
 #include <shared_mutex>
@@ -75,6 +77,10 @@ class DiskStore::Impl {
     ~Impl() = default;  // FdGuard handles fd cleanup
 
     void put(std::string_view key, std::string_view value) {
+        // File format uses 32-bit length prefixes
+        if (key.size() > UINT32_MAX || value.size() > UINT32_MAX) {
+            throw std::runtime_error("Key or value too large for disk store");
+        }
         bool should_compact = false;
         {
             std::unique_lock lock(mutex_);
@@ -87,6 +93,10 @@ class DiskStore::Impl {
     }
 
     void put(std::string_view key, std::string_view value, util::Duration ttl) {
+        // File format uses 32-bit length prefixes
+        if (key.size() > UINT32_MAX || value.size() > UINT32_MAX) {
+            throw std::runtime_error("Key or value too large for disk store");
+        }
         bool should_compact = false;
         {
             std::unique_lock lock(mutex_);
@@ -168,7 +178,7 @@ class DiskStore::Impl {
         util::write_int_fd<uint32_t>(fd_.get(), kMagic);
         util::write_int_fd<uint32_t>(fd_.get(), kVersion);
         if (fsync(fd_.get()) != 0) {
-            throw std::runtime_error("failed ot fsync after clear: " +
+            throw std::runtime_error("failed to fsync after clear: " +
                                      std::string(strerror(errno)));
         }
 
@@ -207,8 +217,20 @@ class DiskStore::Impl {
     }
 
     void compact() {
-        std::unique_lock lock(mutex_);
-        do_compact_unlocked(lock);
+        // Skip if another compaction is already in progress
+        bool expected = false;
+        if (!compacting_.compare_exchange_strong(expected, true)) {
+            return;
+        }
+
+        try {
+            std::unique_lock lock(mutex_);
+            do_compact_unlocked(lock);
+            compacting_.store(false);
+        } catch (...) {
+            compacting_.store(false);
+            throw;
+        }
     }
 
    private:
@@ -360,11 +382,18 @@ class DiskStore::Impl {
     [[nodiscard]] static std::string read_value_from_fd(int fd, uint64_t offset) {
         checked_lseek(fd, offset, SEEK_SET);
         uint8_t entry_type;
-        util::read_int_fd<uint8_t>(fd, entry_type);
+        if (!util::read_int_fd<uint8_t>(fd, entry_type)) {
+            throw std::runtime_error("failed to read entry type at offset " +
+                                     std::to_string(offset));
+        }
         std::string key;
-        util::read_string_fd(fd, key);
+        if (!util::read_string_fd(fd, key)) {
+            throw std::runtime_error("failed to read key at offset " + std::to_string(offset));
+        }
         std::string value;
-        util::read_string_fd(fd, value);
+        if (!util::read_string_fd(fd, value)) {
+            throw std::runtime_error("failed to read value at offset " + std::to_string(offset));
+        }
         return value;
     }
 
@@ -376,10 +405,22 @@ class DiskStore::Impl {
     }
 
     void try_auto_compact() {
-        // Check threshold under lock, but do_compact releases lock during I/O
-        std::unique_lock lock(mutex_);
-        if (tombstone_count_ >= options_.compaction_threshold) {
-            do_compact_unlocked(lock);
+        // Skip if another compaction is already in progress
+        bool expected = false;
+        if (!compacting_.compare_exchange_strong(expected, true)) {
+            return;
+        }
+
+        try {
+            // Check threshold under lock, but do_compact releases lock during I/O
+            std::unique_lock lock(mutex_);
+            if (tombstone_count_ >= options_.compaction_threshold) {
+                do_compact_unlocked(lock);
+            }
+            compacting_.store(false);
+        } catch (...) {
+            compacting_.store(false);
+            throw;
         }
     }
 
@@ -514,7 +555,12 @@ class DiskStore::Impl {
         }
 
         // reopen the data file
-        fd_.reset(open(data_path_.c_str(), O_RDWR, 0644));
+        int new_fd = open(data_path_.c_str(), O_RDWR, 0644);
+        if (new_fd < 0) {
+            throw std::runtime_error("failed to reopen data file after compaction: " +
+                                     std::string(strerror(errno)));
+        }
+        fd_.reset(new_fd);
 
         index_.clear();
         load_index();
@@ -545,6 +591,7 @@ class DiskStore::Impl {
     std::unordered_map<std::string, IndexEntry> index_;
     std::size_t tombstone_count_ = 0;
     std::size_t entry_count_ = 0;
+    std::atomic<bool> compacting_{false};  // Prevents concurrent compactions
 };
 
 // PIMPL INTERFACE ---------------------------------------------------------------------------

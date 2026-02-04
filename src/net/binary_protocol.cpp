@@ -1,5 +1,6 @@
 #include "kvstore/net/binary_protocol.hpp"
 
+#include <climits>
 #include <cstring>
 #include <stdexcept>
 
@@ -44,6 +45,11 @@ std::vector<uint8_t> BinaryProtocol::encode_request(const Request& req) {
             break;
         default:
             break;
+    }
+
+    // Protocol uses 32-bit length field - reject oversized payloads
+    if (payload.size() > UINT32_MAX) {
+        throw std::runtime_error("Payload too large for binary protocol");
     }
 
     std::vector<uint8_t> result;
@@ -95,12 +101,9 @@ std::optional<Request> BinaryProtocol::decode_request(const std::vector<uint8_t>
         case Command::PutEx:
             req.key = util::read_string(data.data(), offset, max_offset);
             req.value = util::read_string(data.data(), offset, max_offset);
-            if (offset + 8 > max_offset) {
-                throw std::runtime_error("Incomplete TTL");
-            }
+            // read_int checks bounds internally and increments offset
             req.ttl_ms =
                 static_cast<int64_t>(util::read_int<uint64_t>(data.data(), offset, max_offset));
-            offset += 8;
             break;
 
         case Command::Size:
@@ -126,6 +129,11 @@ std::vector<uint8_t> BinaryProtocol::encode_response(const Response& resp) {
 
     if (!resp.data.empty()) {
         util::write_string(payload, resp.data);  // optional data
+    }
+
+    // Protocol uses 32-bit length field - reject oversized payloads
+    if (payload.size() > UINT32_MAX) {
+        throw std::runtime_error("Response payload too large for binary protocol");
     }
 
     std::vector<uint8_t> result;

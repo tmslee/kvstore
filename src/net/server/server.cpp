@@ -153,8 +153,11 @@ class Server::Impl {
             throw std::runtime_error("failed to listen: " + std::string(strerror(errno)));
         }
 
-        // make server sockt non-blocking
-        Connection::set_nonblocking(fd);
+        // make server socket non-blocking
+        if (!Connection::set_nonblocking(fd)) {
+            close(fd);
+            throw std::runtime_error("failed to set server socket non-blocking");
+        }
 
         // set running flag
         server_fd_.store(fd);
@@ -240,18 +243,24 @@ class Server::Impl {
             // Send error response before closing (text format - works for text clients,
             // binary clients will see garbled text but won't hang waiting)
             const char* error_msg = "ERROR max connections reached\n";
-            send(client_fd, error_msg, strlen(error_msg), MSG_NOSIGNAL);
+            // Best-effort send - ignore failure since we're closing anyway
+            (void)send(client_fd, error_msg, strlen(error_msg), MSG_NOSIGNAL);
             close(client_fd);
             return;
         }
 
         // make non-blocking and create connection
-        Connection::set_nonblocking(client_fd);
+        if (!Connection::set_nonblocking(client_fd)) {
+            close(client_fd);
+            LOG_ERROR("Failed to set client socket non-blocking");
+            return;
+        }
         std::unique_ptr<Connection> conn;
         try {
             conn = std::make_unique<Connection>(client_fd, limits_);
         } catch (...) {
-            close(client_fd);  // Connection doesn't exist, we must close
+            // Note: Connection constructor initializes FdGuard first, so fd is already
+            // owned and will be closed by FdGuard destructor. Don't close here.
             LOG_ERROR("Failed to create connection");
             return;
         }
@@ -418,6 +427,8 @@ class Server::Impl {
                     store_.cleanup_expired();
                 } catch (const std::exception& e) {
                     LOG_ERROR("Cleanup error: " + std::string(e.what()));
+                } catch (...) {
+                    LOG_ERROR("Cleanup error: unknown exception");
                 }
             }
         }

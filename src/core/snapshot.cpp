@@ -62,7 +62,7 @@ void Snapshot::save(const EntryIterator& iterate) {
 
     // fsync to ensure data is on physical disk before rename
     if (fsync(fd) != 0) {
-        throw std::runtime_error("failed to fsync snapshot file");
+        throw std::runtime_error("failed to fsync snapshot file: " + std::string(strerror(errno)));
     }
 
     // fd_guard will close fd when it goes out of scope

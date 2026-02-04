@@ -35,7 +35,10 @@ class Client::Impl {
         }
 
         // Set close-on-exec to prevent fd leak to child processes
-        fcntl(fd, F_SETFD, FD_CLOEXEC);
+        if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
+            close(fd);
+            throw std::runtime_error("failed to set FD_CLOEXEC: " + std::string(strerror(errno)));
+        }
 
         socket_fd_.reset(fd);
 
@@ -43,8 +46,12 @@ class Client::Impl {
             struct timeval tv;
             tv.tv_sec = options_.timeout_seconds;
             tv.tv_usec = 0;
-            setsockopt(socket_fd_.get(), SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-            setsockopt(socket_fd_.get(), SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+            if (setsockopt(socket_fd_.get(), SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0 ||
+                setsockopt(socket_fd_.get(), SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+                socket_fd_.reset();
+                throw std::runtime_error("failed to set socket timeout: " +
+                                         std::string(strerror(errno)));
+            }
         }
 
         sockaddr_in addr{};
@@ -125,7 +132,11 @@ class Client::Impl {
         if (resp.status != Status::Ok) {
             throw std::runtime_error("SIZE failed: " + resp.data);
         }
-        return std::stoull(resp.data);
+        try {
+            return std::stoull(resp.data);
+        } catch (const std::exception&) {
+            throw std::runtime_error("SIZE failed: invalid response '" + resp.data + "'");
+        }
     }
 
     void clear() {

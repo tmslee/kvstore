@@ -90,7 +90,8 @@ void write_int(std::vector<uint8_t>& buf, T value) {
 template <typename T>
 T read_int(const uint8_t* data, size_t& offset, size_t max_size) {
     static_assert(std::is_integral_v<T>, "T must be integral");
-    if (offset + sizeof(T) > max_size) {
+    // Check for overflow before adding to prevent wraparound
+    if (offset > max_size || sizeof(T) > max_size - offset) {
         throw std::runtime_error("Buffer underflow reading integer");
     }
     T value = 0;
@@ -118,7 +119,8 @@ inline void write_string(std::vector<uint8_t>& buf, std::string_view s) {
 inline std::string read_string(const uint8_t* data, size_t& offset,
                                size_t max_size = kMaxStringSize) {
     uint32_t len = read_int<uint32_t>(data, offset, max_size);
-    if (offset + len > max_size) {
+    // Check for overflow before adding to prevent wraparound
+    if (offset > max_size || len > max_size - offset) {
         throw std::runtime_error("Buffer underflow reading string");
     }
     std::string result(reinterpret_cast<const char*>(data + offset), len);

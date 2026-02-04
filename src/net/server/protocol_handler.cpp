@@ -2,6 +2,7 @@
 
 #include <sys/socket.h>
 
+#include <cerrno>
 #include <stdexcept>
 
 #include "kvstore/net/binary_protocol.hpp"
@@ -15,10 +16,16 @@ bool send_all(int fd, const void* data, size_t len) {
     size_t total_sent = 0;
     while (total_sent < len) {
         ssize_t sent = send(fd, ptr + total_sent, len - total_sent, MSG_NOSIGNAL);
-        if (sent <= 0) {
+        if (sent < 0) {
+            if (errno == EINTR) {
+                continue;  // Retry on signal interrupt
+            }
             return false;
         }
-        total_sent += sent;
+        if (sent == 0) {
+            return false;  // Shouldn't happen with non-zero len
+        }
+        total_sent += static_cast<size_t>(sent);
     }
     return true;
 }
@@ -44,8 +51,14 @@ std::string read_line(int fd, std::string& buffer, std::size_t max_size) {
             return line;
         }
         ssize_t n = recv(fd, chunk, sizeof(chunk) - 1, 0);
-        if (n <= 0) {
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;  // Retry on signal interrupt
+            }
             return "";
+        }
+        if (n == 0) {
+            return "";  // Connection closed
         }
         chunk[n] = '\0';
         buffer += chunk;
@@ -85,8 +98,14 @@ std::optional<Request> BinaryProtocolHandler::read_request(int fd) {
     // read until we have at least 4 bytes for the length header
     while (buffer_.size() < 4) {
         ssize_t n = recv(fd, chunk, sizeof(chunk), 0);
-        if (n <= 0) {
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;  // Retry on signal interrupt
+            }
             return std::nullopt;
+        }
+        if (n == 0) {
+            return std::nullopt;  // Connection closed
         }
         buffer_.insert(buffer_.end(), chunk, chunk + n);
     }
@@ -100,8 +119,14 @@ std::optional<Request> BinaryProtocolHandler::read_request(int fd) {
     // now read until complete message
     while (!BinaryProtocol::has_complete_message(buffer_)) {
         ssize_t n = recv(fd, chunk, sizeof(chunk), 0);
-        if (n <= 0) {
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;  // Retry on signal interrupt
+            }
             return std::nullopt;
+        }
+        if (n == 0) {
+            return std::nullopt;  // Connection closed
         }
         buffer_.insert(buffer_.end(), chunk, chunk + n);
     }

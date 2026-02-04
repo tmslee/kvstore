@@ -29,6 +29,12 @@ target_link_libraries(logger_test PRIVATE kvstore GTest::gtest_main)
 add_executable(config_test util/config_test.cpp)
 target_link_libraries(config_test PRIVATE kvstore GTest::gtest_main)
 
+add_executable(binary_io_test util/binary_io_test.cpp)
+target_link_libraries(binary_io_test PRIVATE kvstore GTest::gtest_main)
+
+add_executable(fd_guard_test util/fd_guard_test.cpp)
+target_link_libraries(fd_guard_test PRIVATE kvstore GTest::gtest_main)
+
 # Server component unit tests
 add_executable(connection_test net/server/connection_test.cpp)
 target_link_libraries(connection_test PRIVATE kvstore GTest::gtest_main)
@@ -48,6 +54,9 @@ target_link_libraries(client_test PRIVATE kvstore GTest::gtest_main)
 
 add_executable(disk_store_test core/disk_store_test.cpp)
 target_link_libraries(disk_store_test PRIVATE kvstore GTest::gtest_main)
+
+add_executable(concurrent_test core/concurrent_test.cpp)
+target_link_libraries(concurrent_test PRIVATE kvstore GTest::gtest_main)
 
 add_executable(signal_handler_test util/signal_handler_test.cpp)
 target_link_libraries(signal_handler_test PRIVATE kvstore GTest::gtest_main)
@@ -69,6 +78,8 @@ set(UNIT_TESTS
     binary_protocol_test
     logger_test
     config_test
+    binary_io_test
+    fd_guard_test
     connection_test
     event_loop_test
 )
@@ -77,6 +88,7 @@ set(INTEGRATION_TESTS
     server_test
     client_test
     disk_store_test
+    concurrent_test
     signal_handler_test
     event_loop_integration_test
 )
