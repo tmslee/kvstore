@@ -30,24 +30,36 @@ void print_usage(const char* program) {
 int main(int argc, char* argv[]) {
     ClientOptions opts;
 
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg == "--host" && i + 1 < argc) {
-            opts.host = argv[++i];
-        } else if (arg == "--port" && i + 1 < argc) {
-            opts.port = static_cast<uint16_t>(std::stoi(argv[++i]));
-        } else if (arg == "--binary") {
-            opts.binary = true;
-        } else if (arg == "--timeout" && i + 1 < argc) {
-            opts.timeout_seconds = std::stoi(argv[++i]);
-        } else if (arg == "--help") {
-            print_usage(argv[0]);
-            return 0;
-        } else {
-            std::cerr << "Unknown option: " << arg << std::endl;
-            print_usage(argv[0]);
-            return 1;
+    try {
+        for (int i = 1; i < argc; ++i) {
+            std::string arg = argv[i];
+            if (arg == "--host" && i + 1 < argc) {
+                opts.host = argv[++i];
+            } else if (arg == "--port" && i + 1 < argc) {
+                int port = std::stoi(argv[++i]);
+                if (port < 1 || port > 65535) {
+                    throw std::out_of_range("port must be 1-65535");
+                }
+                opts.port = static_cast<uint16_t>(port);
+            } else if (arg == "--binary") {
+                opts.binary = true;
+            } else if (arg == "--timeout" && i + 1 < argc) {
+                opts.timeout_seconds = std::stoi(argv[++i]);
+            } else if (arg == "--help") {
+                print_usage(argv[0]);
+                return 0;
+            } else {
+                std::cerr << "Unknown option: " << arg << std::endl;
+                print_usage(argv[0]);
+                return 1;
+            }
         }
+    } catch (const std::invalid_argument& e) {
+        std::cerr << "Invalid argument: expected a number" << std::endl;
+        return 1;
+    } catch (const std::out_of_range& e) {
+        std::cerr << "Invalid argument: " << e.what() << std::endl;
+        return 1;
     }
 
     Client client(opts);

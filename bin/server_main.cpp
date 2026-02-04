@@ -46,7 +46,12 @@ int main(int argc, char* argv[]) {
         kvstore::util::Logger::instance().set_level(config.log_level);
 
         //create data dir
-        std::filesystem::create_directories(config.data_dir);
+        std::error_code ec;
+        std::filesystem::create_directories(config.data_dir, ec);
+        if (ec) {
+            throw std::runtime_error("failed to create data directory '" +
+                                     config.data_dir.string() + "': " + ec.message());
+        }
 
         //setup store
         std::unique_ptr<kvstore::core::IStore> store;

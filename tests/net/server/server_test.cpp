@@ -299,4 +299,112 @@ TEST_F(ServerDiskStoreTest, PutExWithSpaces) {
     EXPECT_EQ(send_command("GET foo"), "OK hello world");
 }
 
+// =============================================================================
+// Protocol Limits Tests - verify server enforces size limits
+// =============================================================================
+
+class ServerLimitsTest : public ::testing::Test {
+   protected:
+    void SetUp() override {
+        store_ = std::make_unique<core::Store>();
+        server::ServerOptions opts;
+        opts.port = 16383;
+        opts.max_line_size = 100;      // small limit for testing
+        opts.max_key_size = 10;        // max 10 byte keys
+        opts.max_value_size = 20;      // max 20 byte values
+        server_ = std::make_unique<server::Server>(*store_, opts);
+        server_->start();
+    }
+
+    void TearDown() override {
+        if (server_) {
+            server_->stop();
+        }
+    }
+
+    // Returns empty string if connection closed (expected for limit violations)
+    std::string send_command(const std::string& cmd) {
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            return "ERROR socket creation failed";
+        }
+
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(16383);
+        inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+
+        if (connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+            close(sock);
+            return "ERROR connection failed";
+        }
+
+        std::string msg = cmd + "\n";
+        send(sock, msg.c_str(), msg.size(), 0);
+
+        char buffer[1024];
+        ssize_t n = recv(sock, buffer, sizeof(buffer) - 1, 0);
+        close(sock);
+
+        if (n <= 0) {
+            return "";  // connection closed - expected for limit violations
+        }
+
+        buffer[n] = '\0';
+        std::string response(buffer);
+        if (!response.empty() && response.back() == '\n') {
+            response.pop_back();
+        }
+        return response;
+    }
+
+    std::unique_ptr<core::Store> store_;
+    std::unique_ptr<server::Server> server_;
+};
+
+TEST_F(ServerLimitsTest, NormalOperationWithinLimits) {
+    // Keys and values within limits should work
+    EXPECT_EQ(send_command("PUT shortkey shortvalue"), "OK");
+    EXPECT_EQ(send_command("GET shortkey"), "OK shortvalue");
+}
+
+TEST_F(ServerLimitsTest, KeyTooLarge) {
+    // Key exceeds max_key_size (10 bytes)
+    std::string long_key(20, 'x');  // 20 bytes > 10 byte limit
+    std::string response = send_command("PUT " + long_key + " value");
+    // Server should disconnect or return error
+    EXPECT_TRUE(response.empty() || response.find("ERROR") != std::string::npos)
+        << "Got response: " << response;
+}
+
+TEST_F(ServerLimitsTest, ValueTooLarge) {
+    // Value exceeds max_value_size (20 bytes)
+    std::string long_value(50, 'y');  // 50 bytes > 20 byte limit
+    std::string response = send_command("PUT key " + long_value);
+    // Server should disconnect or return error
+    EXPECT_TRUE(response.empty() || response.find("ERROR") != std::string::npos);
+}
+
+TEST_F(ServerLimitsTest, LineTooLong) {
+    // Line exceeds max_line_size (100 bytes)
+    std::string long_line(150, 'z');  // 150 bytes > 100 byte limit
+    std::string response = send_command("PUT " + long_line);
+    // Server should return error or disconnect
+    EXPECT_TRUE(response.empty() || response.find("ERROR") != std::string::npos);
+}
+
+TEST_F(ServerLimitsTest, ExactlyAtKeyLimit) {
+    // Key exactly at limit should work
+    std::string exact_key(10, 'k');  // exactly 10 bytes
+    EXPECT_EQ(send_command("PUT " + exact_key + " value"), "OK");
+    EXPECT_EQ(send_command("GET " + exact_key), "OK value");
+}
+
+TEST_F(ServerLimitsTest, ExactlyAtValueLimit) {
+    // Value exactly at limit should work
+    std::string exact_value(20, 'v');  // exactly 20 bytes
+    EXPECT_EQ(send_command("PUT key " + exact_value), "OK");
+    EXPECT_EQ(send_command("GET key"), "OK " + exact_value);
+}
+
 }  // namespace kvstore::net::test

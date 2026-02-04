@@ -54,6 +54,16 @@ class Connection {
         return fd_.get();
     }
 
+    // check if request was rejected due to protocol limits (key/value/line size)
+    [[nodiscard]] bool has_protocol_error() const noexcept {
+        return !protocol_error_.empty();
+    }
+
+    // get the protocol error message (empty if no error)
+    [[nodiscard]] const std::string& protocol_error() const noexcept {
+        return protocol_error_;
+    }
+
     // set socket to non-blocking mode
     static bool set_nonblocking(int fd);
 
@@ -70,6 +80,8 @@ class Connection {
     size_t read_offset_{0};
     size_t write_offset_{0};
     static constexpr size_t kCompactThreshold = 4096;
+
+    std::string protocol_error_;  // set when request parsing fails due to limit violations
 };
 
 }  // namespace kvstore::net::server
