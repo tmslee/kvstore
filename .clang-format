@@ -4,6 +4,5 @@ ColumnLimit: 100
 AllowShortFunctionsOnASingleLine: Empty
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
-AllowShortBlocksOnASingleLine: Never
 DerivePointerAlignment: false
 PointerAlignment: Left
