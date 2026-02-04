@@ -35,7 +35,10 @@ class Client::Impl {
         }
 
         // Set close-on-exec to prevent fd leak to child processes
-        fcntl(fd, F_SETFD, FD_CLOEXEC);
+        if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
+            close(fd);
+            throw std::runtime_error("failed to set FD_CLOEXEC: " + std::string(strerror(errno)));
+        }
 
         socket_fd_.reset(fd);
 
