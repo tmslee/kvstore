@@ -153,8 +153,11 @@ class Server::Impl {
             throw std::runtime_error("failed to listen: " + std::string(strerror(errno)));
         }
 
-        // make server sockt non-blocking
-        Connection::set_nonblocking(fd);
+        // make server socket non-blocking
+        if (!Connection::set_nonblocking(fd)) {
+            close(fd);
+            throw std::runtime_error("failed to set server socket non-blocking");
+        }
 
         // set running flag
         server_fd_.store(fd);
@@ -246,7 +249,11 @@ class Server::Impl {
         }
 
         // make non-blocking and create connection
-        Connection::set_nonblocking(client_fd);
+        if (!Connection::set_nonblocking(client_fd)) {
+            close(client_fd);
+            LOG_ERROR("Failed to set client socket non-blocking");
+            return;
+        }
         std::unique_ptr<Connection> conn;
         try {
             conn = std::make_unique<Connection>(client_fd, limits_);
